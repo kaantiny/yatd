@@ -82,4 +82,11 @@ td label list-all
 # What can be worked on right now?
 td ready # open with all blockers resolved
 td search "smtp" # substring match in title and description
+
+# What should I work on next?
+td next                    # top 5 by critical path (default)
+td next --mode effort      # top 5 by effort-weighted scoring
+td next --verbose          # show scoring breakdown per task
+td next -n 3               # limit to top 3
+td next --mode effort -v   # combine flags
 ```

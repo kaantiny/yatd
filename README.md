@@ -36,6 +36,7 @@ Commands:
   label    Manage labels
   search   Search tasks by title or description
   ready    Show tasks with no open blockers
+  next     Recommend next task(s) to work on
   stats    Show task statistics (always JSON)
   compact  Vacuum the database
   export   Export tasks to JSONL (one JSON object per line)
