@@ -2,6 +2,7 @@ pub mod cli;
 pub mod cmd;
 pub mod color;
 pub mod db;
+pub mod migrate;
 
 use clap::Parser;
 
