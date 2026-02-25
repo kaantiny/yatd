@@ -41,6 +41,7 @@ pub fn run(root: &Path, json: bool) -> Result<()> {
         let c = crate::color::stdout_theme();
         let mut table = Table::new();
         table.load_preset(NOTHING);
+        table.set_header(vec!["ID", "PRIORITY", "EFFORT", "TITLE"]);
         for t in &tasks {
             table.add_row(vec![
                 format!("{}{}{}", c.green, t.id, c.reset),

@@ -70,6 +70,7 @@ pub fn run(
         let c = crate::color::stdout_theme();
         let mut table = Table::new();
         table.load_preset(NOTHING);
+        table.set_header(vec!["ID", "STATUS", "PRIORITY", "EFFORT", "TITLE"]);
         for t in &tasks {
             table.add_row(vec![
                 format!("{}{}{}", c.bold, t.id, c.reset),
