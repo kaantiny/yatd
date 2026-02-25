@@ -1,6 +1,7 @@
 use anyhow::{bail, Result};
 use comfy_table::presets::NOTHING;
 use comfy_table::Table;
+use std::collections::HashSet;
 use std::path::Path;
 
 use crate::db;
@@ -41,7 +42,22 @@ pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool)
         .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
         .collect::<rusqlite::Result<_>>()?;
 
-    let scored = score::rank(&open_tasks, &edges, mode, limit);
+    // Parents with at least one open subtask are not actionable work
+    // units — exclude them from candidates while keeping them in the
+    // graph for downstream scoring.
+    let mut parent_stmt =
+        conn.prepare("SELECT DISTINCT parent FROM tasks WHERE parent != '' AND status = 'open'")?;
+    let parents_with_open_children: HashSet<String> = parent_stmt
+        .query_map([], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+
+    let scored = score::rank(
+        &open_tasks,
+        &edges,
+        &parents_with_open_children,
+        mode,
+        limit,
+    );
 
     if scored.is_empty() {
         if json {

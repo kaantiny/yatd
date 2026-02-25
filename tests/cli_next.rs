@@ -213,3 +213,133 @@ fn next_ignores_closed_tasks() {
     assert_eq!(results.len(), 1);
     assert_eq!(results[0]["id"].as_str().unwrap(), a);
 }
+
+#[test]
+fn next_excludes_parent_with_open_subtasks() {
+    let tmp = init_tmp();
+    let parent = create_task(&tmp, "Parent task", "high", "low");
+    // Create a subtask under the parent.
+    let out = td()
+        .args([
+            "--json",
+            "create",
+            "Child task",
+            "-p",
+            "medium",
+            "-e",
+            "medium",
+            "--parent",
+            &parent,
+        ])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let child: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let child_id = child["id"].as_str().unwrap().to_string();
+
+    let out = td()
+        .args(["--json", "next"])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let results = v.as_array().unwrap();
+    let ids: Vec<&str> = results.iter().map(|r| r["id"].as_str().unwrap()).collect();
+
+    // Parent should be excluded; only the child subtask should appear.
+    assert!(!ids.contains(&parent.as_str()), "parent should be excluded");
+    assert!(
+        ids.contains(&child_id.as_str()),
+        "child should be a candidate"
+    );
+}
+
+#[test]
+fn next_includes_parent_when_all_subtasks_closed() {
+    let tmp = init_tmp();
+    let parent = create_task(&tmp, "Parent task", "high", "low");
+    let out = td()
+        .args([
+            "--json",
+            "create",
+            "Child task",
+            "-p",
+            "medium",
+            "-e",
+            "medium",
+            "--parent",
+            &parent,
+        ])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let child: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let child_id = child["id"].as_str().unwrap().to_string();
+
+    // Close the subtask.
+    td().args(["done", &child_id])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    let out = td()
+        .args(["--json", "next"])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let results = v.as_array().unwrap();
+    let ids: Vec<&str> = results.iter().map(|r| r["id"].as_str().unwrap()).collect();
+
+    // Parent should reappear as a candidate once all children are closed.
+    assert!(
+        ids.contains(&parent.as_str()),
+        "parent should be a candidate"
+    );
+}
+
+#[test]
+fn next_nested_parents_excluded_at_each_level() {
+    let tmp = init_tmp();
+    // grandparent → parent → child (nested subtasks)
+    let gp = create_task(&tmp, "Grandparent", "high", "low");
+    let out = td()
+        .args([
+            "--json", "create", "Parent", "-p", "medium", "-e", "medium", "--parent", &gp,
+        ])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let p: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let p_id = p["id"].as_str().unwrap().to_string();
+
+    let out = td()
+        .args([
+            "--json", "create", "Child", "-p", "low", "-e", "low", "--parent", &p_id,
+        ])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let c: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let c_id = c["id"].as_str().unwrap().to_string();
+
+    let out = td()
+        .args(["--json", "next"])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let results = v.as_array().unwrap();
+    let ids: Vec<&str> = results.iter().map(|r| r["id"].as_str().unwrap()).collect();
+
+    // Both grandparent and parent are excluded; only the leaf child appears.
+    assert!(
+        !ids.contains(&gp.as_str()),
+        "grandparent should be excluded"
+    );
+    assert!(!ids.contains(&p_id.as_str()), "parent should be excluded");
+    assert!(
+        ids.contains(&c_id.as_str()),
+        "leaf child should be a candidate"
+    );
+}

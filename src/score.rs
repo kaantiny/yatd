@@ -114,11 +114,14 @@ fn downstream(
 /// # Arguments
 /// * `open_tasks` — all open tasks (id, title, priority, effort)
 /// * `blocker_edges` — `(task_id, blocker_id)` pairs among open tasks
+/// * `exclude` — task IDs to exclude from candidates (still counted in
+///   downstream scores). Used to filter parent tasks that have open subtasks.
 /// * `mode` — scoring strategy
 /// * `limit` — maximum number of results to return
 pub fn rank(
     open_tasks: &[(String, String, i32, i32)],
     blocker_edges: &[(String, String)],
+    exclude: &HashSet<String>,
     mode: Mode,
     limit: usize,
 ) -> Vec<ScoredTask> {
@@ -157,10 +160,11 @@ pub fn rank(
         }
     }
 
-    // Find ready tasks: open tasks with no open blockers.
+    // Find ready tasks: open tasks with no open blockers, excluding
+    // parent tasks that still have open subtasks.
     let ready: Vec<&TaskNode> = nodes
         .values()
-        .filter(|n| !blocked_by.contains_key(&n.id))
+        .filter(|n| !blocked_by.contains_key(&n.id) && !exclude.contains(&n.id))
         .collect();
 
     // Score each ready task.
@@ -218,7 +222,7 @@ mod tests {
     #[test]
     fn single_task_no_deps() {
         let tasks = vec![task("a", "Alpha", 1, 1)];
-        let result = rank(&tasks, &[], Mode::Impact, 5);
+        let result = rank(&tasks, &[], &HashSet::new(), Mode::Impact, 5);
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id, "a");
@@ -234,7 +238,7 @@ mod tests {
         // A is ready (blocks B), B is blocked.
         let tasks = vec![task("a", "Blocker", 2, 2), task("b", "Blocked", 1, 1)];
         let edges = vec![edge("b", "a")];
-        let result = rank(&tasks, &edges, Mode::Impact, 5);
+        let result = rank(&tasks, &edges, &HashSet::new(), Mode::Impact, 5);
 
         // Only A is ready.
         assert_eq!(result.len(), 1);
@@ -255,7 +259,7 @@ mod tests {
             task("c", "Leaf", 1, 1),
         ];
         let edges = vec![edge("b", "a"), edge("c", "b")];
-        let result = rank(&tasks, &edges, Mode::Impact, 5);
+        let result = rank(&tasks, &edges, &HashSet::new(), Mode::Impact, 5);
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id, "a");
@@ -275,7 +279,7 @@ mod tests {
             task("c", "Sink", 1, 1),
         ];
         let edges = vec![edge("c", "a"), edge("c", "b")];
-        let result = rank(&tasks, &edges, Mode::Impact, 5);
+        let result = rank(&tasks, &edges, &HashSet::new(), Mode::Impact, 5);
 
         assert_eq!(result.len(), 2);
         // Both A and B see C as downstream.
@@ -296,8 +300,8 @@ mod tests {
         ];
         let edges = vec![edge("b", "a")];
 
-        let impact = rank(&tasks, &edges, Mode::Impact, 5);
-        let effort = rank(&tasks, &edges, Mode::Effort, 5);
+        let impact = rank(&tasks, &edges, &HashSet::new(), Mode::Impact, 5);
+        let effort = rank(&tasks, &edges, &HashSet::new(), Mode::Effort, 5);
 
         // Impact: (3.0 + 1.0) * 3.0 / 3.0 = 4.0
         assert!((impact[0].score - 4.0).abs() < f64::EPSILON);
@@ -309,7 +313,7 @@ mod tests {
     fn effort_mode_prefers_low_effort() {
         // Two standalone tasks: A is high-effort, B is low-effort. Same priority.
         let tasks = vec![task("a", "Heavy", 2, 3), task("b", "Light", 2, 1)];
-        let result = rank(&tasks, &[], Mode::Effort, 5);
+        let result = rank(&tasks, &[], &HashSet::new(), Mode::Effort, 5);
 
         assert_eq!(result.len(), 2);
         // B should rank higher (low effort).
@@ -324,13 +328,13 @@ mod tests {
             task("b", "B", 2, 2),
             task("c", "C", 3, 3),
         ];
-        let result = rank(&tasks, &[], Mode::Impact, 2);
+        let result = rank(&tasks, &[], &HashSet::new(), Mode::Impact, 2);
         assert_eq!(result.len(), 2);
     }
 
     #[test]
     fn empty_input() {
-        let result = rank(&[], &[], Mode::Impact, 5);
+        let result = rank(&[], &[], &HashSet::new(), Mode::Impact, 5);
         assert!(result.is_empty());
     }
 
@@ -338,8 +342,53 @@ mod tests {
     fn stable_sort_by_id() {
         // Two tasks with identical scores should sort by id.
         let tasks = vec![task("b", "Second", 2, 2), task("a", "First", 2, 2)];
-        let result = rank(&tasks, &[], Mode::Impact, 5);
+        let result = rank(&tasks, &[], &HashSet::new(), Mode::Impact, 5);
         assert_eq!(result[0].id, "a");
         assert_eq!(result[1].id, "b");
+    }
+
+    #[test]
+    fn excluded_tasks_not_candidates() {
+        // A and B are both standalone ready tasks, but A is excluded
+        // (simulating a parent with open subtasks).
+        let tasks = vec![task("a", "Parent", 1, 1), task("b", "Leaf", 2, 2)];
+        let exclude: HashSet<String> = ["a".to_string()].into();
+        let result = rank(&tasks, &[], &exclude, Mode::Impact, 5);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, "b");
+    }
+
+    #[test]
+    fn excluded_task_still_counted_in_downstream() {
+        // A blocks B (the excluded parent). B blocks C.
+        // A is ready. B is excluded but its downstream weight should still
+        // flow through the graph — A should see both B and C downstream.
+        let tasks = vec![
+            task("a", "Root", 2, 2),
+            task("b", "Parent", 1, 1),
+            task("c", "Leaf", 2, 2),
+        ];
+        let edges = vec![edge("b", "a"), edge("c", "b")];
+        let exclude: HashSet<String> = ["b".to_string()].into();
+        let result = rank(&tasks, &edges, &exclude, Mode::Impact, 5);
+
+        // Only A is ready (B is blocked and also excluded, C is blocked).
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, "a");
+        // Downstream still includes B and C.
+        assert_eq!(result[0].total_unblocked, 2);
+    }
+
+    #[test]
+    fn parent_with_all_children_closed_remains_candidate() {
+        // A standalone task that would be in the open_tasks list but NOT
+        // in the exclude set (because all its children are closed, the
+        // caller wouldn't put it there). Verify it's still a candidate.
+        let tasks = vec![task("a", "Parent done kids", 1, 1)];
+        let result = rank(&tasks, &[], &HashSet::new(), Mode::Impact, 5);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, "a");
     }
 }
