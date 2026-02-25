@@ -1,0 +1,22 @@
+[package]
+name = "yatd"
+version = "0.1.0"
+edition = "2021"
+description = "Todo tracker for AI agents"
+
+[[bin]]
+name = "td"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+clap = { version = "4", features = ["derive"] }
+rusqlite = { version = "0.34", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"
