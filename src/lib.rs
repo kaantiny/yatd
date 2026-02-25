@@ -3,6 +3,7 @@ pub mod cmd;
 pub mod color;
 pub mod db;
 pub mod migrate;
+pub mod score;
 
 use clap::Parser;
 
