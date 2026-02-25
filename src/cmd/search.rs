@@ -1,4 +1,6 @@
 use anyhow::Result;
+use comfy_table::presets::NOTHING;
+use comfy_table::Table;
 use std::path::Path;
 
 use crate::db;
@@ -31,8 +33,16 @@ pub fn run(root: &Path, query: &str, json: bool) -> Result<()> {
         println!("{}", serde_json::to_string(&summary)?);
     } else {
         let c = crate::color::stdout_theme();
+        let mut table = Table::new();
+        table.load_preset(NOTHING);
         for t in &tasks {
-            println!("{}{}{} {}", c.bold, t.id, c.reset, t.title);
+            table.add_row(vec![
+                format!("{}{}{}", c.bold, t.id, c.reset),
+                t.title.clone(),
+            ]);
+        }
+        if !tasks.is_empty() {
+            println!("{table}");
         }
     }
 
