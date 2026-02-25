@@ -90,3 +90,92 @@ fn dep_tree_shows_children() {
         .stdout(predicate::str::contains(".1"))
         .stdout(predicate::str::contains(".2"));
 }
+
+#[test]
+fn dep_add_rejects_self_cycle() {
+    let tmp = init_tmp();
+    let a = create_task(&tmp, "Self-referential");
+
+    td().args(["dep", "add", &a, &a])
+        .current_dir(&tmp)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cycle"));
+}
+
+#[test]
+fn dep_add_rejects_direct_cycle() {
+    let tmp = init_tmp();
+    let a = create_task(&tmp, "Task A");
+    let b = create_task(&tmp, "Task B");
+
+    // A blocked by B
+    td().args(["dep", "add", &a, &b])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    // B blocked by A would create A → B → A
+    td().args(["dep", "add", &b, &a])
+        .current_dir(&tmp)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cycle"));
+}
+
+#[test]
+fn dep_add_rejects_transitive_cycle() {
+    let tmp = init_tmp();
+    let a = create_task(&tmp, "Task A");
+    let b = create_task(&tmp, "Task B");
+    let c = create_task(&tmp, "Task C");
+
+    // A blocked by B, B blocked by C
+    td().args(["dep", "add", &a, &b])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+    td().args(["dep", "add", &b, &c])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    // C blocked by A would create A → B → C → A
+    td().args(["dep", "add", &c, &a])
+        .current_dir(&tmp)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cycle"));
+}
+
+#[test]
+fn dep_add_allows_diamond_without_cycle() {
+    let tmp = init_tmp();
+    let a = create_task(&tmp, "Task A");
+    let b = create_task(&tmp, "Task B");
+    let c = create_task(&tmp, "Task C");
+    let d = create_task(&tmp, "Task D");
+
+    // Diamond: D blocked by B and C, both blocked by A
+    td().args(["dep", "add", &d, &b])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+    td().args(["dep", "add", &d, &c])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+    td().args(["dep", "add", &b, &a])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+    td().args(["dep", "add", &c, &a])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    // Verify all edges exist — no false cycle detection
+    let t = get_task_json(&tmp, &d);
+    let blockers = t["blockers"].as_array().unwrap();
+    assert_eq!(blockers.len(), 2);
+}

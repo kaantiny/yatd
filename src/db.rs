@@ -132,6 +132,44 @@ pub fn load_blockers(conn: &Connection, task_id: &str) -> Result<Vec<String>> {
     Ok(blockers)
 }
 
+/// Check whether `from` can reach `to` by following blocker edges.
+///
+/// Returns `true` if there is a path from `from` to `to` in the blocker
+/// graph (i.e. adding an edge `to → from` would create a cycle).
+/// Uses a visited-set so it terminates even if the graph already contains
+/// a cycle from bad data.
+pub fn would_cycle(conn: &Connection, from: &str, to: &str) -> Result<bool> {
+    use std::collections::{HashSet, VecDeque};
+
+    if from == to {
+        return Ok(true);
+    }
+
+    let mut visited = HashSet::new();
+    let mut queue = VecDeque::new();
+    queue.push_back(from.to_string());
+    visited.insert(from.to_string());
+
+    let mut stmt = conn.prepare("SELECT blocker_id FROM blockers WHERE task_id = ?1")?;
+
+    while let Some(current) = queue.pop_front() {
+        let neighbors: Vec<String> = stmt
+            .query_map([&current], |r| r.get(0))?
+            .collect::<rusqlite::Result<_>>()?;
+
+        for neighbor in neighbors {
+            if neighbor == to {
+                return Ok(true);
+            }
+            if visited.insert(neighbor.clone()) {
+                queue.push_back(neighbor);
+            }
+        }
+    }
+
+    Ok(false)
+}
+
 /// Load a full task with labels and blockers.
 pub fn load_task_detail(conn: &Connection, id: &str) -> Result<TaskDetail> {
     let task = conn.query_row(

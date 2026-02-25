@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::path::Path;
 
 use crate::cli::DepAction;
@@ -9,6 +9,9 @@ pub fn run(root: &Path, action: &DepAction, json: bool) -> Result<()> {
 
     match action {
         DepAction::Add { child, parent } => {
+            if db::would_cycle(&conn, parent, child)? {
+                bail!("adding dependency would create a cycle: {child} → {parent} → … → {child}");
+            }
             conn.execute(
                 "INSERT OR IGNORE INTO blockers (task_id, blocker_id) VALUES (?1, ?2)",
                 [child, parent],
