@@ -103,38 +103,6 @@ pub fn load_task_detail(conn: &Connection, id: &str) -> Result<TaskDetail> {
     })
 }
 
-const SCHEMA: &str = "
-CREATE TABLE tasks (
-    id          TEXT PRIMARY KEY,
-    title       TEXT NOT NULL,
-    description TEXT DEFAULT '',
-    type        TEXT DEFAULT 'task',
-    priority    INTEGER DEFAULT 2,
-    status      TEXT DEFAULT 'open',
-    parent      TEXT DEFAULT '',
-    created     TEXT NOT NULL,
-    updated     TEXT NOT NULL
-);
-
-CREATE TABLE labels (
-    task_id TEXT,
-    label   TEXT,
-    PRIMARY KEY (task_id, label),
-    FOREIGN KEY (task_id) REFERENCES tasks(id)
-);
-
-CREATE TABLE blockers (
-    task_id    TEXT,
-    blocker_id TEXT,
-    PRIMARY KEY (task_id, blocker_id),
-    FOREIGN KEY (task_id) REFERENCES tasks(id)
-);
-
-CREATE INDEX idx_status   ON tasks(status);
-CREATE INDEX idx_priority ON tasks(priority);
-CREATE INDEX idx_parent   ON tasks(parent);
-";
-
 /// Walk up from `start` looking for a `.td/` directory.
 pub fn find_root(start: &Path) -> Result<PathBuf> {
     let mut dir = start.to_path_buf();
@@ -148,24 +116,25 @@ pub fn find_root(start: &Path) -> Result<PathBuf> {
     }
 }
 
-/// Create the `.td/` directory and initialise the database schema.
+/// Create the `.td/` directory and initialise the database via migrations.
 pub fn init(root: &Path) -> Result<Connection> {
     let td = root.join(TD_DIR);
     std::fs::create_dir_all(&td)?;
-    let conn = Connection::open(td.join(DB_FILE))?;
+    let mut conn = Connection::open(td.join(DB_FILE))?;
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-    conn.execute_batch(SCHEMA)?;
+    crate::migrate::migrate_up(&mut conn)?;
     Ok(conn)
 }
 
-/// Open an existing database.
+/// Open an existing database, applying any pending migrations.
 pub fn open(root: &Path) -> Result<Connection> {
     let path = root.join(TD_DIR).join(DB_FILE);
     if !path.exists() {
         bail!("not initialized. Run 'td init'");
     }
-    let conn = Connection::open(path)?;
+    let mut conn = Connection::open(path)?;
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+    crate::migrate::migrate_up(&mut conn)?;
     Ok(conn)
 }
 
