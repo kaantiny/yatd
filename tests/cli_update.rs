@@ -53,7 +53,7 @@ fn update_changes_priority() {
     let tmp = init_tmp();
     let id = create_task(&tmp, "Reprioritise");
 
-    td().args(["update", &id, "-p", "1"])
+    td().args(["update", &id, "-p", "high"])
         .current_dir(&tmp)
         .assert()
         .success();
@@ -96,7 +96,7 @@ fn update_json_returns_task() {
     let id = create_task(&tmp, "JSON update");
 
     let out = td()
-        .args(["--json", "update", &id, "-p", "1"])
+        .args(["--json", "update", &id, "-p", "high"])
         .current_dir(&tmp)
         .output()
         .unwrap();

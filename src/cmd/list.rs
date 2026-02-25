@@ -7,6 +7,7 @@ pub fn run(
     root: &Path,
     status: Option<&str>,
     priority: Option<i32>,
+    effort: Option<i32>,
     label: Option<&str>,
     json: bool,
 ) -> Result<()> {
@@ -27,6 +28,11 @@ pub fn run(
     if let Some(p) = priority {
         sql.push_str(&format!(" AND priority = ?{idx}"));
         params.push(Box::new(p));
+        idx += 1;
+    }
+    if let Some(e) = effort {
+        sql.push_str(&format!(" AND effort = ?{idx}"));
+        params.push(Box::new(e));
         idx += 1;
     }
     if let Some(l) = label {
@@ -70,7 +76,7 @@ pub fn run(
                 format!("[{}]", t.status),
                 c.reset,
                 c.red,
-                format!("P{}", t.priority),
+                db::priority_label(t.priority),
                 c.reset,
                 t.title,
             );

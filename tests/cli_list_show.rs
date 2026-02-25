@@ -74,17 +74,17 @@ fn list_filter_by_status() {
 fn list_filter_by_priority() {
     let tmp = init_tmp();
 
-    td().args(["create", "Low prio", "-p", "3"])
+    td().args(["create", "Low prio", "-p", "low"])
         .current_dir(&tmp)
         .assert()
         .success();
-    td().args(["create", "High prio", "-p", "1"])
+    td().args(["create", "High prio", "-p", "high"])
         .current_dir(&tmp)
         .assert()
         .success();
 
     let out = td()
-        .args(["--json", "list", "-p", "1"])
+        .args(["--json", "list", "-p", "high"])
         .current_dir(&tmp)
         .output()
         .unwrap();

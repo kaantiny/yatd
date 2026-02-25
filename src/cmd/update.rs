@@ -6,6 +6,7 @@ use crate::db;
 pub struct Opts<'a> {
     pub status: Option<&'a str>,
     pub priority: Option<i32>,
+    pub effort: Option<i32>,
     pub title: Option<&'a str>,
     pub desc: Option<&'a str>,
     pub json: bool,
@@ -27,6 +28,11 @@ pub fn run(root: &Path, id: &str, opts: Opts) -> Result<()> {
     if let Some(p) = opts.priority {
         sets.push(format!("priority = ?{idx}"));
         params.push(Box::new(p));
+        idx += 1;
+    }
+    if let Some(e) = opts.effort {
+        sets.push(format!("effort = ?{idx}"));
+        params.push(Box::new(e));
         idx += 1;
     }
     if let Some(t) = opts.title {

@@ -41,7 +41,7 @@ fn create_json_returns_task_object() {
 fn create_with_priority_and_type() {
     let tmp = init_tmp();
 
-    td().args(["--json", "create", "Urgent bug", "-p", "1", "-t", "bug"])
+    td().args(["--json", "create", "Urgent bug", "-p", "high", "-t", "bug"])
         .current_dir(&tmp)
         .assert()
         .success()

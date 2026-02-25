@@ -49,6 +49,50 @@ pub struct TaskDetail {
     pub blockers: Vec<String>,
 }
 
+/// Parse a priority label to its integer value.
+///
+/// Accepts "low" (3), "medium" (2), or "high" (1).
+pub fn parse_priority(s: &str) -> anyhow::Result<i32> {
+    match s {
+        "high" => Ok(1),
+        "medium" => Ok(2),
+        "low" => Ok(3),
+        _ => bail!("invalid priority '{s}': expected low, medium, or high"),
+    }
+}
+
+/// Convert a priority integer back to its label.
+pub fn priority_label(val: i32) -> &'static str {
+    match val {
+        1 => "high",
+        2 => "medium",
+        3 => "low",
+        _ => "unknown",
+    }
+}
+
+/// Parse an effort label to its integer value.
+///
+/// Accepts "low" (1), "medium" (2), or "high" (3).
+pub fn parse_effort(s: &str) -> anyhow::Result<i32> {
+    match s {
+        "low" => Ok(1),
+        "medium" => Ok(2),
+        "high" => Ok(3),
+        _ => bail!("invalid effort '{s}': expected low, medium, or high"),
+    }
+}
+
+/// Convert an effort integer back to its label.
+pub fn effort_label(val: i32) -> &'static str {
+    match val {
+        1 => "low",
+        2 => "medium",
+        3 => "high",
+        _ => "unknown",
+    }
+}
+
 /// Current UTC time in ISO 8601 format.
 pub fn now_utc() -> String {
     chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()

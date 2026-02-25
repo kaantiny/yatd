@@ -29,7 +29,8 @@ pub fn run(root: &Path, json: bool) -> Result<()> {
                 serde_json::json!({
                     "id": t.id,
                     "title": t.title,
-                    "priority": t.priority,
+                    "priority": db::priority_label(t.priority),
+                    "effort": db::effort_label(t.effort),
                 })
             })
             .collect();
@@ -38,8 +39,14 @@ pub fn run(root: &Path, json: bool) -> Result<()> {
         let c = crate::color::stdout_theme();
         for t in &tasks {
             println!(
-                "{}{:<12}{} {}P{:<3}{} {}",
-                c.green, t.id, c.reset, c.red, t.priority, c.reset, t.title
+                "{}{:<12}{} {}{:<8}{} {}",
+                c.green,
+                t.id,
+                c.reset,
+                c.red,
+                db::priority_label(t.priority),
+                c.reset,
+                t.title
             );
         }
     }

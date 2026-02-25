@@ -43,8 +43,8 @@ pub fn dispatch(cli: &Cli) -> Result<()> {
                 &root,
                 create::Opts {
                     title: title.as_deref(),
-                    priority: *priority,
-                    effort: *effort,
+                    priority: db::parse_priority(priority)?,
+                    effort: db::parse_effort(effort)?,
                     task_type,
                     desc: desc.as_deref(),
                     parent: parent.as_deref(),
@@ -56,13 +56,17 @@ pub fn dispatch(cli: &Cli) -> Result<()> {
         Command::List {
             status,
             priority,
+            effort,
             label,
         } => {
             let root = require_root()?;
+            let pri = priority.as_deref().map(db::parse_priority).transpose()?;
+            let eff = effort.as_deref().map(db::parse_effort).transpose()?;
             list::run(
                 &root,
                 status.as_deref(),
-                *priority,
+                pri,
+                eff,
                 label.as_deref(),
                 cli.json,
             )
@@ -75,16 +79,20 @@ pub fn dispatch(cli: &Cli) -> Result<()> {
             id,
             status,
             priority,
+            effort,
             title,
             desc,
         } => {
             let root = require_root()?;
+            let pri = priority.as_deref().map(db::parse_priority).transpose()?;
+            let eff = effort.as_deref().map(db::parse_effort).transpose()?;
             update::run(
                 &root,
                 id,
                 update::Opts {
                     status: status.as_deref(),
-                    priority: *priority,
+                    priority: pri,
+                    effort: eff,
                     title: title.as_deref(),
                     desc: desc.as_deref(),
                     json: cli.json,

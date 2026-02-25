@@ -26,13 +26,13 @@ pub enum Command {
         /// Task title
         title: Option<String>,
 
-        /// Priority level (1=high, 2=medium, 3=low)
-        #[arg(short, long, default_value_t = 2)]
-        priority: i32,
+        /// Priority (low, medium, high)
+        #[arg(short, long, default_value = "medium")]
+        priority: String,
 
-        /// Effort level (1=low, 2=medium, 3=high)
-        #[arg(short, long, default_value_t = 2)]
-        effort: i32,
+        /// Effort (low, medium, high)
+        #[arg(short, long, default_value = "medium")]
+        effort: String,
 
         /// Task type
         #[arg(short = 't', long = "type", default_value = "task")]
@@ -58,9 +58,13 @@ pub enum Command {
         #[arg(short, long)]
         status: Option<String>,
 
-        /// Filter by priority
+        /// Filter by priority (low, medium, high)
         #[arg(short, long)]
-        priority: Option<i32>,
+        priority: Option<String>,
+
+        /// Filter by effort (low, medium, high)
+        #[arg(short, long)]
+        effort: Option<String>,
 
         /// Filter by label
         #[arg(short, long)]
@@ -82,9 +86,13 @@ pub enum Command {
         #[arg(short, long)]
         status: Option<String>,
 
-        /// Set priority
+        /// Set priority (low, medium, high)
         #[arg(short, long)]
-        priority: Option<i32>,
+        priority: Option<String>,
+
+        /// Set effort (low, medium, high)
+        #[arg(short, long)]
+        effort: Option<String>,
 
         /// Set title
         #[arg(short = 't', long)]
