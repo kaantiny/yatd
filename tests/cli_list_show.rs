@@ -118,6 +118,30 @@ fn list_filter_by_label() {
     assert_eq!(tasks[0]["title"].as_str().unwrap(), "Tagged");
 }
 
+#[test]
+fn list_filter_by_effort() {
+    let tmp = init_tmp();
+
+    td().args(["create", "Easy", "-e", "low"])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+    td().args(["create", "Hard", "-e", "high"])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    let out = td()
+        .args(["--json", "list", "-e", "low"])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let tasks = v.as_array().unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0]["title"].as_str().unwrap(), "Easy");
+}
+
 // ── show ─────────────────────────────────────────────────────────────
 
 #[test]

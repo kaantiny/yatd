@@ -109,3 +109,40 @@ fn import_round_trips_with_export() {
     let labels = bravo["labels"].as_array().unwrap();
     assert!(labels.contains(&serde_json::Value::String("important".into())));
 }
+
+#[test]
+fn export_import_preserves_effort() {
+    let tmp = init_tmp();
+
+    td().args(["create", "High effort", "-e", "high"])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    // Export.
+    let out = td().arg("export").current_dir(&tmp).output().unwrap();
+    let exported = String::from_utf8(out.stdout).unwrap();
+
+    // Verify effort is in the JSONL.
+    let v: serde_json::Value = serde_json::from_str(exported.trim()).unwrap();
+    assert_eq!(v["effort"].as_i64().unwrap(), 3);
+
+    // Round-trip into a fresh database.
+    let export_file = tmp.path().join("effort.jsonl");
+    std::fs::write(&export_file, &exported).unwrap();
+
+    let tmp2 = TempDir::new().unwrap();
+    td().arg("init").current_dir(&tmp2).assert().success();
+    td().args(["import", export_file.to_str().unwrap()])
+        .current_dir(&tmp2)
+        .assert()
+        .success();
+
+    let out2 = td()
+        .args(["--json", "list"])
+        .current_dir(&tmp2)
+        .output()
+        .unwrap();
+    let v2: serde_json::Value = serde_json::from_slice(&out2.stdout).unwrap();
+    assert_eq!(v2[0]["effort"].as_i64().unwrap(), 3);
+}

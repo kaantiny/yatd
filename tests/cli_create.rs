@@ -123,3 +123,55 @@ fn create_subtask_under_parent() {
     );
     assert_eq!(child["parent"].as_str().unwrap(), parent_id);
 }
+
+#[test]
+fn create_with_effort() {
+    let tmp = init_tmp();
+
+    let out = td()
+        .args(["--json", "create", "Hard task", "-e", "high"])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["effort"].as_i64().unwrap(), 3);
+}
+
+#[test]
+fn create_with_priority_label() {
+    let tmp = init_tmp();
+
+    let out = td()
+        .args(["--json", "create", "Low prio", "-p", "low"])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["priority"].as_i64().unwrap(), 3);
+}
+
+#[test]
+fn create_rejects_invalid_priority() {
+    let tmp = init_tmp();
+
+    td().args(["create", "Bad", "-p", "urgent"])
+        .current_dir(&tmp)
+        .assert()
+        .failure()
+        .stderr(predicates::prelude::predicate::str::contains(
+            "invalid priority",
+        ));
+}
+
+#[test]
+fn create_rejects_invalid_effort() {
+    let tmp = init_tmp();
+
+    td().args(["create", "Bad", "-e", "huge"])
+        .current_dir(&tmp)
+        .assert()
+        .failure()
+        .stderr(predicates::prelude::predicate::str::contains(
+            "invalid effort",
+        ));
+}

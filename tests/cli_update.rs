@@ -104,6 +104,20 @@ fn update_json_returns_task() {
     assert_eq!(v["priority"].as_i64().unwrap(), 1);
 }
 
+#[test]
+fn update_changes_effort() {
+    let tmp = init_tmp();
+    let id = create_task(&tmp, "Re-estimate");
+
+    td().args(["update", &id, "-e", "high"])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    let t = get_task_json(&tmp, &id);
+    assert_eq!(t["effort"].as_i64().unwrap(), 3);
+}
+
 // ── done ─────────────────────────────────────────────────────────────
 
 #[test]

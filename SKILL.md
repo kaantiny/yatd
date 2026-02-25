@@ -5,8 +5,11 @@ description: Manages tasks with the td CLI. Use when tracking work items, creati
 
 ```bash
 # New work — title should stand on its own a year from now
+# -p priority: low, medium (default), high
+# -e effort: low, medium (default), high
+# -t type  -d desc  -l labels (csv)
 td create "panic in token_refresh when OAuth provider returns HTTP 429" \
-  -p 1 -t bug -d "$(cat <<'DESC'
+  -p high -e medium -t bug -d "$(cat <<'DESC'
 Reproduction:
 1. Point OAuth at a rate-limiting provider (or stub with httpbin/status/429)
 2. Let the access token expire
@@ -23,7 +26,7 @@ DESC
 )"
 
 td create "Add STARTTLS for outbound SMTP per RFC 3207" \
-  -t feature -d "$(cat <<'DESC'
+  -e high -t feature -d "$(cat <<'DESC'
 smtp::send() opens a plaintext socket and never upgrades. Per RFC 3207,
 send EHLO, check for STARTTLS capability, then upgrade before AUTH.
 
@@ -36,7 +39,7 @@ DESC
 )"
 
 td create "Flaky: test_concurrent_writes times out ~1/5 CI runs" \
-  -p 3 -t bug -l ci,flaky -d "$(cat <<'DESC'
+  -p low -e low -t bug -l ci,flaky -d "$(cat <<'DESC'
 Passes locally, times out on CI. Likely a race on the shared tempdir —
 each spawn should use its own database file.
 
@@ -46,12 +49,12 @@ DESC
 )"
 
 td create "Child task" --parent td-a1b2c3 # ID becomes <parent>.N
-# -p priority: 1=high 2=medium 3=low  -t type  -d desc  -l labels (csv)
 
 # What's on the board?
 td list # all tasks
 td list -s open # by status: open, in_progress, closed
-td list -p 1 # high-priority only
+td list -p high # high-priority only
+td list -e low # low-effort tasks
 td list -l frontend # by label
 
 # Full context on a task
@@ -59,7 +62,7 @@ td show td-a1b2c3
 
 # Task status or details changed
 td update td-a1b2c3 -s in_progress
-td update td-a1b2c3 -p 1 -t "Revised title" -d "Added context"
+td update td-a1b2c3 -p high -e low -t "Revised title" -d "Added context"
 
 # Finished or needs reopening
 td done td-a1b2c3 td-d4e5f6 # one or many
