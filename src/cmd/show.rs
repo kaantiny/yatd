@@ -50,13 +50,27 @@ pub fn run(root: &Path, id: &str, json: bool) -> Result<()> {
                 detail.labels.join(",")
             );
         }
-        if !detail.blockers.is_empty() {
-            println!(
-                "{}    blockers{} = {}",
-                c.bold,
-                c.reset,
-                detail.blockers.join(",")
-            );
+        let (open_blockers, closed_blockers) = db::load_blockers_partitioned(&conn, &t.id)?;
+        let total = open_blockers.len() + closed_blockers.len();
+        if total > 0 {
+            let label = if total == 1 { "blocker" } else { "blockers" };
+            let all_closed = open_blockers.is_empty();
+            let mut ids: Vec<String> = Vec::new();
+            for id in &open_blockers {
+                ids.push(id.clone());
+            }
+            for id in &closed_blockers {
+                ids.push(format!("{id} [closed]"));
+            }
+
+            let value = if all_closed {
+                format!("[all closed] {}", ids.join(", "))
+            } else {
+                ids.join(", ")
+            };
+
+            // Right-align the label to match other fields (12 chars wide).
+            println!("{}{label:>12}{} = {value}", c.bold, c.reset);
         }
     }
 

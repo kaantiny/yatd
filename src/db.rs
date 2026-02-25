@@ -132,6 +132,35 @@ pub fn load_blockers(conn: &Connection, task_id: &str) -> Result<Vec<String>> {
     Ok(blockers)
 }
 
+/// Load blockers for a task, partitioned by whether they are resolved.
+///
+/// Returns `(open, resolved)` where open blockers have a non-closed status
+/// and resolved blockers are closed.
+pub fn load_blockers_partitioned(
+    conn: &Connection,
+    task_id: &str,
+) -> Result<(Vec<String>, Vec<String>)> {
+    let mut stmt = conn.prepare(
+        "SELECT b.blocker_id, COALESCE(t.status, 'open')
+         FROM blockers b
+         LEFT JOIN tasks t ON b.blocker_id = t.id
+         WHERE b.task_id = ?1",
+    )?;
+    let mut open = Vec::new();
+    let mut resolved = Vec::new();
+    let rows: Vec<(String, String)> = stmt
+        .query_map([task_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    for (id, status) in rows {
+        if status == "closed" {
+            resolved.push(id);
+        } else {
+            open.push(id);
+        }
+    }
+    Ok((open, resolved))
+}
+
 /// Check whether `from` can reach `to` by following blocker edges.
 ///
 /// Returns `true` if there is a path from `from` to `to` in the blocker

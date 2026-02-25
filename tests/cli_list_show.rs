@@ -201,3 +201,85 @@ fn show_nonexistent_task_fails() {
         .failure()
         .stderr(predicate::str::contains("not found"));
 }
+
+#[test]
+fn show_annotates_closed_blockers() {
+    let tmp = init_tmp();
+    let task = create_task(&tmp, "Blocked task");
+    let open_blocker = create_task(&tmp, "Still open");
+    let closed_blocker = create_task(&tmp, "Will close");
+
+    td().args(["dep", "add", &task, &open_blocker])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+    td().args(["dep", "add", &task, &closed_blocker])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+    td().args(["done", &closed_blocker])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    // Plural label, open blocker bare, closed one annotated.
+    td().args(["show", &task])
+        .current_dir(&tmp)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("blockers"))
+        .stdout(predicate::str::contains(&open_blocker))
+        .stdout(predicate::str::contains(&format!(
+            "{closed_blocker} [closed]"
+        )));
+}
+
+#[test]
+fn show_all_closed_blockers_prefixed() {
+    let tmp = init_tmp();
+    let task = create_task(&tmp, "Was blocked");
+    let blocker = create_task(&tmp, "Done now");
+
+    td().args(["dep", "add", &task, &blocker])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+    td().args(["done", &blocker])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    // Singular label, [all closed] prefix.
+    td().args(["show", &task])
+        .current_dir(&tmp)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("blocker"))
+        .stdout(predicate::str::contains("[all closed]"))
+        .stdout(predicate::str::contains(&blocker));
+}
+
+#[test]
+fn show_single_open_blocker_singular_label() {
+    let tmp = init_tmp();
+    let task = create_task(&tmp, "Blocked");
+    let blocker = create_task(&tmp, "Blocking");
+
+    td().args(["dep", "add", &task, &blocker])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    let out = td()
+        .args(["show", &task])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    // Singular "blocker", no "blockers".
+    assert!(stdout.contains("blocker"));
+    assert!(stdout.contains(&blocker));
+    // Should not contain [closed] or [all closed].
+    assert!(!stdout.contains("[closed]"));
+}
