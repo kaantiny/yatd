@@ -5,9 +5,9 @@ BINDIR := $(or $(XDG_BIN_HOME),$(XDG_BIN_DIR),$(HOME)/.local/bin)
 all: fmt check test
 
 ci: fmt
-	@cargo check --quiet 2>&1 | grep -v '^warning: use of deprecated' || true
-	@cargo clippy --quiet -- -D warnings 2>&1 | grep -v '^warning: use of deprecated' || true
-	@cargo test --quiet 2>&1 | grep -v '^warning: use of deprecated' | grep -E '(^test |^running|test result|FAILED|error)'
+	@cargo check --quiet 2>&1 || true
+	@cargo clippy --quiet -- -D warnings 2>&1 || true
+	@cargo test --quiet 2>&1 | grep -E '(^test |^running|test result|FAILED|error)'
 
 check:
 	@cargo check --quiet
