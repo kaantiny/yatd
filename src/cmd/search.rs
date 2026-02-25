@@ -8,7 +8,7 @@ pub fn run(root: &Path, query: &str, json: bool) -> Result<()> {
     let pattern = format!("%{query}%");
 
     let mut stmt = conn.prepare(
-        "SELECT id, title, description, type, priority, status, parent, created, updated
+        "SELECT id, title, description, type, priority, status, effort, parent, created, updated
          FROM tasks
          WHERE title LIKE ?1 OR description LIKE ?1",
     )?;

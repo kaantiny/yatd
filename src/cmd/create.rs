@@ -6,6 +6,7 @@ use crate::db;
 pub struct Opts<'a> {
     pub title: Option<&'a str>,
     pub priority: i32,
+    pub effort: i32,
     pub task_type: &'a str,
     pub desc: Option<&'a str>,
     pub parent: Option<&'a str>,
@@ -34,14 +35,15 @@ pub fn run(root: &Path, opts: Opts) -> Result<()> {
     };
 
     conn.execute(
-        "INSERT INTO tasks (id, title, description, type, priority, status, parent, created, updated)
-         VALUES (?1, ?2, ?3, ?4, ?5, 'open', ?6, ?7, ?8)",
+        "INSERT INTO tasks (id, title, description, type, priority, status, effort, parent, created, updated)
+         VALUES (?1, ?2, ?3, ?4, ?5, 'open', ?6, ?7, ?8, ?9)",
         rusqlite::params![
             id,
             title,
             desc,
             opts.task_type,
             opts.priority,
+            opts.effort,
             opts.parent.unwrap_or(""),
             ts,
             ts
@@ -68,6 +70,7 @@ pub fn run(root: &Path, opts: Opts) -> Result<()> {
             task_type: opts.task_type.to_string(),
             priority: opts.priority,
             status: "open".to_string(),
+            effort: opts.effort,
             parent: opts.parent.unwrap_or("").to_string(),
             created: ts.clone(),
             updated: ts,

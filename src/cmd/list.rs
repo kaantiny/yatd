@@ -13,7 +13,7 @@ pub fn run(
     let conn = db::open(root)?;
 
     let mut sql = String::from(
-        "SELECT id, title, description, type, priority, status, parent, created, updated
+        "SELECT id, title, description, type, priority, status, effort, parent, created, updated
          FROM tasks WHERE 1=1",
     );
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();

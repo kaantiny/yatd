@@ -32,6 +32,7 @@ pub fn dispatch(cli: &Cli) -> Result<()> {
         Command::Create {
             title,
             priority,
+            effort,
             task_type,
             desc,
             parent,
@@ -43,6 +44,7 @@ pub fn dispatch(cli: &Cli) -> Result<()> {
                 create::Opts {
                     title: title.as_deref(),
                     priority: *priority,
+                    effort: *effort,
                     task_type,
                     desc: desc.as_deref(),
                     parent: parent.as_deref(),

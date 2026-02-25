@@ -26,6 +26,13 @@ static MIGRATIONS: &[Migration] = &[
         post_hook_up: None,
         post_hook_down: None,
     },
+    // 1 → 2: add effort column (integer-backed, default medium)
+    Migration {
+        up_sql: include_str!("migrations/0002_add_effort.up.sql"),
+        down_sql: include_str!("migrations/0002_add_effort.down.sql"),
+        post_hook_up: None,
+        post_hook_down: None,
+    },
 ];
 
 /// Read the current schema version from the database.

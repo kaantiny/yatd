@@ -7,7 +7,7 @@ pub fn run(root: &Path) -> Result<()> {
     let conn = db::open(root)?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, title, description, type, priority, status, parent, created, updated
+        "SELECT id, title, description, type, priority, status, effort, parent, created, updated
          FROM tasks ORDER BY id",
     )?;
 
@@ -26,6 +26,7 @@ pub fn run(root: &Path) -> Result<()> {
                 task_type: t.task_type.clone(),
                 priority: t.priority,
                 status: t.status.clone(),
+                effort: t.effort,
                 parent: t.parent.clone(),
                 created: t.created.clone(),
                 updated: t.updated.clone(),

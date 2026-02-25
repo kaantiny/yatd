@@ -7,7 +7,7 @@ pub fn run(root: &Path, json: bool) -> Result<()> {
     let conn = db::open(root)?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, title, description, type, priority, status, parent, created, updated
+        "SELECT id, title, description, type, priority, status, effort, parent, created, updated
          FROM tasks
          WHERE status = 'open'
            AND id NOT IN (

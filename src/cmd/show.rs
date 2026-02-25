@@ -25,6 +25,7 @@ pub fn run(root: &Path, id: &str, json: bool) -> Result<()> {
         println!("{}       title{} = {}", c.bold, c.reset, t.title);
         println!("{}      status{} = {}", c.bold, c.reset, t.status);
         println!("{}    priority{} = {}", c.bold, c.reset, t.priority);
+        println!("{}      effort{} = {}", c.bold, c.reset, t.effort);
         println!("{}        type{} = {}", c.bold, c.reset, t.task_type);
         if !t.description.is_empty() {
             println!("{} description{} = {}", c.bold, c.reset, t.description);

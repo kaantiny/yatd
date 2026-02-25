@@ -30,6 +30,10 @@ pub enum Command {
         #[arg(short, long, default_value_t = 2)]
         priority: i32,
 
+        /// Effort level (1=low, 2=medium, 3=high)
+        #[arg(short, long, default_value_t = 2)]
+        effort: i32,
+
         /// Task type
         #[arg(short = 't', long = "type", default_value = "task")]
         task_type: String,

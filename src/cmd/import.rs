@@ -17,6 +17,8 @@ struct ImportTask {
     priority: i32,
     #[serde(default = "default_status")]
     status: String,
+    #[serde(default = "default_effort")]
+    effort: i32,
     #[serde(default)]
     parent: String,
     created: String,
@@ -35,6 +37,9 @@ fn default_priority() -> i32 {
 }
 fn default_status() -> String {
     "open".into()
+}
+fn default_effort() -> i32 {
+    2
 }
 
 pub fn run(root: &Path, file: &str) -> Result<()> {
@@ -58,8 +63,8 @@ pub fn run(root: &Path, file: &str) -> Result<()> {
 
         conn.execute(
             "INSERT OR REPLACE INTO tasks
-             (id, title, description, type, priority, status, parent, created, updated)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+             (id, title, description, type, priority, status, effort, parent, created, updated)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             rusqlite::params![
                 t.id,
                 t.title,
@@ -67,6 +72,7 @@ pub fn run(root: &Path, file: &str) -> Result<()> {
                 t.task_type,
                 t.priority,
                 t.status,
+                t.effort,
                 t.parent,
                 t.created,
                 t.updated,

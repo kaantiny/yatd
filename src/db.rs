@@ -19,6 +19,7 @@ pub struct Task {
     pub task_type: String,
     pub priority: i32,
     pub status: String,
+    pub effort: i32,
     pub parent: String,
     pub created: String,
     pub updated: String,
@@ -62,6 +63,7 @@ pub fn row_to_task(row: &rusqlite::Row) -> rusqlite::Result<Task> {
         task_type: row.get("type")?,
         priority: row.get("priority")?,
         status: row.get("status")?,
+        effort: row.get("effort")?,
         parent: row.get("parent")?,
         created: row.get("created")?,
         updated: row.get("updated")?,
@@ -89,7 +91,7 @@ pub fn load_blockers(conn: &Connection, task_id: &str) -> Result<Vec<String>> {
 /// Load a full task with labels and blockers.
 pub fn load_task_detail(conn: &Connection, id: &str) -> Result<TaskDetail> {
     let task = conn.query_row(
-        "SELECT id, title, description, type, priority, status, parent, created, updated
+        "SELECT id, title, description, type, priority, status, effort, parent, created, updated
          FROM tasks WHERE id = ?1",
         [id],
         row_to_task,
