@@ -11,6 +11,7 @@ mod ready;
 mod reopen;
 mod search;
 mod show;
+mod skill;
 mod stats;
 mod update;
 
@@ -128,5 +129,6 @@ pub fn dispatch(cli: &Cli) -> Result<()> {
             let root = require_root()?;
             import::run(&root, file)
         }
+        Command::Skill { dir } => skill::run(dir.as_deref()),
     }
 }

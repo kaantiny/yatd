@@ -141,6 +141,13 @@ pub enum Command {
         /// Path to JSONL file (- for stdin)
         file: String,
     },
+
+    /// Install the agent skill file (SKILL.md)
+    Skill {
+        /// Skills directory (writes managing-tasks-with-td/SKILL.md inside)
+        #[arg(long)]
+        dir: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
