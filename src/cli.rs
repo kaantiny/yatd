@@ -139,6 +139,21 @@ pub enum Command {
     /// Show tasks with no open blockers
     Ready,
 
+    /// Recommend next task(s) to work on
+    Next {
+        /// Scoring strategy: impact (default) or effort
+        #[arg(short, long, default_value = "impact")]
+        mode: String,
+
+        /// Show signal breakdown and equation
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Maximum number of results
+        #[arg(short = 'n', long = "limit", default_value = "5")]
+        limit: usize,
+    },
+
     /// Show task statistics (always JSON)
     Stats,
 

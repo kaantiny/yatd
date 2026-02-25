@@ -7,6 +7,7 @@ mod import;
 mod init;
 mod label;
 mod list;
+mod next;
 mod ready;
 mod reopen;
 mod search;
@@ -122,6 +123,14 @@ pub fn dispatch(cli: &Cli) -> Result<()> {
         Command::Ready => {
             let root = require_root()?;
             ready::run(&root, cli.json)
+        }
+        Command::Next {
+            mode,
+            verbose,
+            limit,
+        } => {
+            let root = require_root()?;
+            next::run(&root, mode, *verbose, *limit, cli.json)
         }
         Command::Stats => {
             let root = require_root()?;
