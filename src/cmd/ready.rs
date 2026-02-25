@@ -1,8 +1,9 @@
 use anyhow::Result;
 use comfy_table::presets::NOTHING;
-use comfy_table::Table;
+use comfy_table::{Cell, Color, Table};
 use std::path::Path;
 
+use crate::color::{cell_bold, cell_fg, stdout_use_color};
 use crate::db;
 
 pub fn run(root: &Path, json: bool) -> Result<()> {
@@ -38,16 +39,16 @@ pub fn run(root: &Path, json: bool) -> Result<()> {
             .collect();
         println!("{}", serde_json::to_string(&summary)?);
     } else {
-        let c = crate::color::stdout_theme();
+        let use_color = stdout_use_color();
         let mut table = Table::new();
         table.load_preset(NOTHING);
         table.set_header(vec!["ID", "PRIORITY", "EFFORT", "TITLE"]);
         for t in &tasks {
             table.add_row(vec![
-                format!("{}{}{}", c.green, t.id, c.reset),
-                format!("{}{}{}", c.red, db::priority_label(t.priority), c.reset),
-                format!("{}{}{}", c.blue, db::effort_label(t.effort), c.reset),
-                t.title.clone(),
+                cell_bold(&t.id, use_color),
+                cell_fg(db::priority_label(t.priority), Color::Red, use_color),
+                cell_fg(db::effort_label(t.effort), Color::Blue, use_color),
+                Cell::new(&t.title),
             ]);
         }
         if !tasks.is_empty() {

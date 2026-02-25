@@ -1,9 +1,10 @@
 use anyhow::{bail, Result};
 use comfy_table::presets::NOTHING;
-use comfy_table::Table;
+use comfy_table::{Cell, Table};
 use std::collections::HashSet;
 use std::path::Path;
 
+use crate::color::{cell_bold, stdout_use_color};
 use crate::db;
 use crate::score::{self, Mode};
 
@@ -90,17 +91,17 @@ pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool)
             .collect();
         println!("{}", serde_json::to_string(&items)?);
     } else {
+        let use_color = stdout_use_color();
         let mut table = Table::new();
         table.load_preset(NOTHING);
         table.set_header(vec!["#", "ID", "SCORE", "TITLE"]);
 
         for (i, s) in scored.iter().enumerate() {
-            let c = crate::color::stdout_theme();
             table.add_row(vec![
-                format!("{}", i + 1),
-                format!("{}{}{}", c.bold, s.id, c.reset),
-                format!("{:.2}", s.score),
-                s.title.clone(),
+                Cell::new(i + 1),
+                cell_bold(&s.id, use_color),
+                Cell::new(format!("{:.2}", s.score)),
+                Cell::new(&s.title),
             ]);
         }
         println!("{table}");

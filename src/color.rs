@@ -1,3 +1,4 @@
+use comfy_table::{Attribute, Cell, Color};
 use std::io::IsTerminal;
 
 pub struct Theme {
@@ -46,5 +47,30 @@ pub fn stderr_theme() -> &'static Theme {
         &ON
     } else {
         &OFF
+    }
+}
+
+/// Whether stdout should use colour.
+pub fn stdout_use_color() -> bool {
+    use_color(std::io::stdout().is_terminal())
+}
+
+/// A table cell with bold text.
+pub fn cell_bold(text: impl ToString, use_color: bool) -> Cell {
+    let cell = Cell::new(text);
+    if use_color {
+        cell.add_attribute(Attribute::Bold)
+    } else {
+        cell
+    }
+}
+
+/// A table cell with a coloured foreground.
+pub fn cell_fg(text: impl ToString, color: Color, use_color: bool) -> Cell {
+    let cell = Cell::new(text);
+    if use_color {
+        cell.fg(color)
+    } else {
+        cell
     }
 }

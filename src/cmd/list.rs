@@ -1,8 +1,9 @@
 use anyhow::Result;
 use comfy_table::presets::NOTHING;
-use comfy_table::Table;
+use comfy_table::{Cell, Color, Table};
 use std::path::Path;
 
+use crate::color::{cell_bold, cell_fg, stdout_use_color};
 use crate::db;
 
 pub fn run(
@@ -67,17 +68,17 @@ pub fn run(
             .collect::<Result<_>>()?;
         println!("{}", serde_json::to_string(&details)?);
     } else {
-        let c = crate::color::stdout_theme();
+        let use_color = stdout_use_color();
         let mut table = Table::new();
         table.load_preset(NOTHING);
         table.set_header(vec!["ID", "STATUS", "PRIORITY", "EFFORT", "TITLE"]);
         for t in &tasks {
             table.add_row(vec![
-                format!("{}{}{}", c.bold, t.id, c.reset),
-                format!("{}[{}]{}", c.yellow, t.status, c.reset),
-                format!("{}{}{}", c.red, db::priority_label(t.priority), c.reset),
-                format!("{}{}{}", c.blue, db::effort_label(t.effort), c.reset),
-                t.title.clone(),
+                cell_bold(&t.id, use_color),
+                cell_fg(format!("[{}]", t.status), Color::Yellow, use_color),
+                cell_fg(db::priority_label(t.priority), Color::Red, use_color),
+                cell_fg(db::effort_label(t.effort), Color::Blue, use_color),
+                Cell::new(&t.title),
             ]);
         }
         if !tasks.is_empty() {
