@@ -7,12 +7,14 @@ possibly complementary to tools like [OpenSpec].
 
 [OpenSpec]: https://github.com/Fission-AI/OpenSpec
 
-Install with `mise use -g cargo:https://git.secluded.site/holt@latest` or
-`cargo install --git https://git.secluded.site/holt`. Tell your agent how/when
-to use td by first installing the skill with `td skill`, then somehow referring
-to td when telling the agent to do something involving td. It shouldn't invoke
-the skill unless you mention td, allowing your agent to use other todo/issue
-tools in other repos even with this global skill.
+Install with `mise use -g cargo:https://git.secluded.site/yatd@latest` or
+`cargo install --git https://git.secluded.site/yatd` or by cloning and running
+`make install`. Tell your agent how/when to use td by first installing the
+skill with `td skill`, then somehow referring to td when telling the agent to
+do something involving td. It shouldn't invoke the skill unless you mention td,
+allowing your agent to use other todo/issue tools in other repos even with this
+global skill. Td IDs are prefixed with `td-`, so pasting the ID should be
+enough of a mention.
 
 Inspired by [alosec/td].
 
