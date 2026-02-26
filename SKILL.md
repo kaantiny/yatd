@@ -60,6 +60,18 @@ td list -l frontend # by label
 # Full context on a task
 td show td-a1b2c3
 
+# Append notes as you go, not just once at the end.
+# Focus on why: what the user asked for, what decision was made, and why.
+# Keep file paths as context, not the headline.
+td log td-a1b2c3 "User asked for logs in show/export/import but not in list --json. Kept list untouched to avoid breaking existing scripts that parse its output."
+td log td-a1b2c3 "User wanted task validation before insert. Added it so 'task not found' is explicit and immediate instead of a less obvious DB failure."
+td log td-a1b2c3 "Kept ON DELETE CASCADE only on task_logs because the user scoped labels/blockers cascade changes to a separate task."
+td log td-a1b2c3 "Stayed with positional message input (no stdin) because that was explicitly requested and is easier to replay from shell history."
+td log td-a1b2c3 "Used timestamp+id ordering so handoff readers get a stable timeline even when two entries land in the same second."
+td log td-a1b2c3 "Import replaces logs for the task to keep repeated imports deterministic and consistent with label/blocker import behavior."
+td log td-a1b2c3 "CI failed only on migration version assertions after adding 0004; updated expected version and re-ran full suite to confirm no behavioral regressions."
+td log td-a1b2c3 "Ran manual round-trip (init -> create -> log -> show -> export/import -> show) to prove logs survive transfer and stay in chronological order."
+
 # Task status or details changed
 td update td-a1b2c3 -s in_progress
 td update td-a1b2c3 -p high -e low -t "Revised title" -d "Added context"

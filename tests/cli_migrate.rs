@@ -20,8 +20,8 @@ fn fresh_init_sets_latest_version() {
     let version: u32 = conn
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    // Version should be 3 (migration 0001 + 0002 + 0003).
-    assert_eq!(version, 3);
+    // Version should be 4 (migration 0001 + 0002 + 0003 + 0004).
+    assert_eq!(version, 4);
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn legacy_db_is_migrated_on_open() {
     let version: u32 = conn
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 3);
+    assert_eq!(version, 4);
 }
 
 #[test]

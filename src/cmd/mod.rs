@@ -7,6 +7,7 @@ mod import;
 mod init;
 mod label;
 mod list;
+mod log;
 mod next;
 mod ready;
 mod reopen;
@@ -75,6 +76,10 @@ pub fn dispatch(cli: &Cli) -> Result<()> {
         Command::Show { id } => {
             let root = require_root()?;
             show::run(&root, id, cli.json)
+        }
+        Command::Log { id, message } => {
+            let root = require_root()?;
+            log::run(&root, id, message, cli.json)
         }
         Command::Update {
             id,

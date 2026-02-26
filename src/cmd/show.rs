@@ -1,7 +1,17 @@
 use anyhow::{bail, Result};
+use serde::Serialize;
 use std::path::Path;
 
 use crate::db;
+
+#[derive(Serialize)]
+struct ShowDetail {
+    #[serde(flatten)]
+    task: db::Task,
+    labels: Vec<String>,
+    blockers: Vec<String>,
+    logs: Vec<db::LogEntry>,
+}
 
 pub fn run(root: &Path, id: &str, json: bool) -> Result<()> {
     let conn = db::open(root)?;
@@ -15,9 +25,16 @@ pub fn run(root: &Path, id: &str, json: bool) -> Result<()> {
     }
 
     let detail = db::load_task_detail(&conn, id)?;
+    let logs = db::load_logs(&conn, id)?;
 
     if json {
-        println!("{}", serde_json::to_string(&detail)?);
+        let out = ShowDetail {
+            task: detail.task,
+            labels: detail.labels,
+            blockers: detail.blockers,
+            logs,
+        };
+        println!("{}", serde_json::to_string(&out)?);
         return Ok(());
     }
 
@@ -81,6 +98,14 @@ pub fn run(root: &Path, id: &str, json: bool) -> Result<()> {
 
     // Timestamps at the bottom
     println!("created {} · updated {}", t.created, t.updated);
+
+    if !logs.is_empty() {
+        println!();
+        println!("--- log ---");
+        for log in &logs {
+            println!("[{}] {}", log.timestamp, log.body);
+        }
+    }
 
     Ok(())
 }

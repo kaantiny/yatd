@@ -27,6 +27,14 @@ struct ImportTask {
     labels: Vec<String>,
     #[serde(default)]
     blockers: Vec<String>,
+    #[serde(default)]
+    logs: Vec<ImportLogEntry>,
+}
+
+#[derive(Deserialize)]
+struct ImportLogEntry {
+    timestamp: String,
+    body: String,
 }
 
 fn default_type() -> String {
@@ -94,6 +102,15 @@ pub fn run(root: &Path, file: &str) -> Result<()> {
             conn.execute(
                 "INSERT INTO blockers (task_id, blocker_id) VALUES (?1, ?2)",
                 [&t.id, blk],
+            )?;
+        }
+
+        // Replace logs.
+        conn.execute("DELETE FROM task_logs WHERE task_id = ?1", [&t.id])?;
+        for log in &t.logs {
+            conn.execute(
+                "INSERT INTO task_logs (task_id, timestamp, body) VALUES (?1, ?2, ?3)",
+                rusqlite::params![&t.id, &log.timestamp, &log.body],
             )?;
         }
     }

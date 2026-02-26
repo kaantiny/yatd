@@ -77,6 +77,14 @@ pub enum Command {
         id: String,
     },
 
+    /// Append a work log entry to a task
+    Log {
+        /// Task ID
+        id: String,
+        /// Log entry body
+        message: String,
+    },
+
     /// Update a task
     Update {
         /// Task ID

@@ -49,6 +49,15 @@ pub struct TaskDetail {
     pub blockers: Vec<String>,
 }
 
+/// A work log entry attached to a task.
+#[derive(Debug, Serialize)]
+pub struct LogEntry {
+    pub id: i64,
+    pub task_id: String,
+    pub timestamp: String,
+    pub body: String,
+}
+
 /// Parse a priority label to its integer value.
 ///
 /// Accepts "low" (3), "medium" (2), or "high" (1).
@@ -130,6 +139,27 @@ pub fn load_blockers(conn: &Connection, task_id: &str) -> Result<Vec<String>> {
         .query_map([task_id], |r| r.get(0))?
         .collect::<rusqlite::Result<Vec<String>>>()?;
     Ok(blockers)
+}
+
+/// Load log entries for a task in chronological order.
+pub fn load_logs(conn: &Connection, task_id: &str) -> Result<Vec<LogEntry>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, task_id, timestamp, body
+         FROM task_logs
+         WHERE task_id = ?1
+         ORDER BY timestamp ASC, id ASC",
+    )?;
+    let logs = stmt
+        .query_map([task_id], |r| {
+            Ok(LogEntry {
+                id: r.get("id")?,
+                task_id: r.get("task_id")?,
+                timestamp: r.get("timestamp")?,
+                body: r.get("body")?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<LogEntry>>>()?;
+    Ok(logs)
 }
 
 /// Load blockers for a task, partitioned by whether they are resolved.

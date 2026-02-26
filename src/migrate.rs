@@ -39,6 +39,12 @@ static MIGRATIONS: &[Migration] = &[
         post_hook_up: None,
         post_hook_down: None,
     },
+    Migration {
+        up_sql: include_str!("migrations/0004_task_logs.up.sql"),
+        down_sql: include_str!("migrations/0004_task_logs.down.sql"),
+        post_hook_up: None,
+        post_hook_down: None,
+    },
 ];
 
 /// Read the current schema version from the database.
@@ -155,6 +161,8 @@ mod tests {
         conn.execute_batch("SELECT task_id FROM labels LIMIT 0")
             .unwrap();
         conn.execute_batch("SELECT task_id FROM blockers LIMIT 0")
+            .unwrap();
+        conn.execute_batch("SELECT task_id FROM task_logs LIMIT 0")
             .unwrap();
     }
 
