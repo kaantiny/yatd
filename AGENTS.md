@@ -4,7 +4,7 @@
 - Rust CLI app (`td`) for local task tracking aimed at agent workflows.
 - Storage is SQLite in a per-project `.td/tasks.db` database.
 - Entry flow is `src/main.rs` → `yatd::run()` (`src/lib.rs`) → `cmd::dispatch()` (`src/cmd/mod.rs`).
-- We use jj for version control, not git. DO NOT use Conventional Commits. Do use imperative, Linux kernel-style commits.
+- We use jj for version control, not git. DO NOT use Conventional Commits. Do use imperative, Linux kernel-style commits. Always check `jj st` before starting. If there are changes in progress, run `jj new ...` to create a new working copy describe the pending work. If there are no changes in the working copy, run `jj desc ...` to describe the pending work.
 - JSON mode is not for "agent consumers". It's for wiring things together, whether the wirer is human or LLM.
 
 ## Essential commands
