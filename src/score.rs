@@ -8,9 +8,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 /// Scoring mode for ranking tasks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
-    /// Critical path: downstream impact dominates.
+    /// Critical path: downstream impact dominates, effort is dampened.
     ///
-    /// `score = (downstream + 1.0) × priority_weight / effort_weight`
+    /// `score = (downstream + 1.0) × priority_weight / effort_weight^0.25`
     Impact,
 
     /// Effort-weighted: effort dominates, downstream is dampened.
@@ -176,7 +176,7 @@ pub fn rank(
             let ew = effort_weight(node.effort);
 
             let score = match mode {
-                Mode::Impact => (ds + 1.0) * pw / ew,
+                Mode::Impact => (ds + 1.0) * pw / ew.powf(0.25),
                 Mode::Effort => (ds * 0.25 + 1.0) * pw / (ew * ew),
             };
 
@@ -226,7 +226,7 @@ mod tests {
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id, "a");
-        // (0 + 1.0) * 3.0 / 1.0 = 3.0
+        // (0 + 1.0) * 3.0 / 1.0^0.25 = 3.0
         assert!((result[0].score - 3.0).abs() < f64::EPSILON);
         assert_eq!(result[0].total_unblocked, 0);
         assert_eq!(result[0].direct_unblocked, 0);
@@ -244,8 +244,9 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id, "a");
         // downstream of A = priority_weight(B) = 3.0
-        // score = (3.0 + 1.0) * 2.0 / 2.0 = 4.0
-        assert!((result[0].score - 4.0).abs() < f64::EPSILON);
+        // score = (3.0 + 1.0) * 2.0 / 2.0^0.25 = 8.0 / 1.1892 ≈ 6.727
+        let expected = (3.0 + 1.0) * 2.0 / 2.0_f64.powf(0.25);
+        assert!((result[0].score - expected).abs() < 1e-10);
         assert_eq!(result[0].total_unblocked, 1);
         assert_eq!(result[0].direct_unblocked, 1);
     }
@@ -264,8 +265,9 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id, "a");
         // downstream = pw(b) + pw(c) = 2.0 + 3.0 = 5.0
-        // score = (5.0 + 1.0) * 2.0 / 2.0 = 6.0
-        assert!((result[0].score - 6.0).abs() < f64::EPSILON);
+        // score = (5.0 + 1.0) * 2.0 / 2.0^0.25
+        let expected = (5.0 + 1.0) * 2.0 / 2.0_f64.powf(0.25);
+        assert!((result[0].score - expected).abs() < 1e-10);
         assert_eq!(result[0].total_unblocked, 2);
         assert_eq!(result[0].direct_unblocked, 1);
     }
@@ -283,12 +285,13 @@ mod tests {
 
         assert_eq!(result.len(), 2);
         // Both A and B see C as downstream.
-        // A: downstream = pw(c) = 3.0, score = (3+1)*3/1 = 12.0
-        // B: downstream = pw(c) = 3.0, score = (3+1)*2/2 = 4.0
+        // A: downstream = pw(c) = 3.0, score = (3+1)*3/1^0.25 = 12.0
+        // B: downstream = pw(c) = 3.0, score = (3+1)*2/2^0.25
         assert_eq!(result[0].id, "a");
         assert!((result[0].score - 12.0).abs() < f64::EPSILON);
+        let expected_b = (3.0 + 1.0) * 2.0 / 2.0_f64.powf(0.25);
         assert_eq!(result[1].id, "b");
-        assert!((result[1].score - 4.0).abs() < f64::EPSILON);
+        assert!((result[1].score - expected_b).abs() < 1e-10);
     }
 
     #[test]
@@ -303,8 +306,9 @@ mod tests {
         let impact = rank(&tasks, &edges, &HashSet::new(), Mode::Impact, 5);
         let effort = rank(&tasks, &edges, &HashSet::new(), Mode::Effort, 5);
 
-        // Impact: (3.0 + 1.0) * 3.0 / 3.0 = 4.0
-        assert!((impact[0].score - 4.0).abs() < f64::EPSILON);
+        // Impact: (3.0 + 1.0) * 3.0 / 3.0^0.25
+        let expected_impact = (3.0 + 1.0) * 3.0 / 3.0_f64.powf(0.25);
+        assert!((impact[0].score - expected_impact).abs() < 1e-10);
         // Effort: (3.0 * 0.25 + 1.0) * 3.0 / 9.0 = 1.75 * 3.0 / 9.0 ≈ 0.583
         assert!((effort[0].score - (1.75 * 3.0 / 9.0)).abs() < f64::EPSILON);
     }
@@ -378,6 +382,18 @@ mod tests {
         assert_eq!(result[0].id, "a");
         // Downstream still includes B and C.
         assert_eq!(result[0].total_unblocked, 2);
+    }
+
+    #[test]
+    fn impact_prefers_priority_over_effort_for_standalone() {
+        // Regression: high-pri/high-eff must rank above medium-pri/low-eff
+        // in impact mode. Previously effort canceled priority entirely.
+        let tasks = vec![
+            task("a", "HighPriHighEff", 1, 3),
+            task("b", "MedPriLowEff", 2, 1),
+        ];
+        let result = rank(&tasks, &[], &HashSet::new(), Mode::Impact, 5);
+        assert_eq!(result[0].id, "a");
     }
 
     #[test]

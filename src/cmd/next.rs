@@ -119,7 +119,7 @@ pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool)
                 match mode {
                     Mode::Impact => {
                         println!(
-                            "   ({:.2} + 1.00) × {:.0} / {:.0} = {:.2}",
+                            "   ({:.2} + 1.00) × {:.0} / {:.0}^0.25 = {:.2}",
                             s.downstream_score, s.priority_weight, s.effort_weight, s.score
                         );
                     }
