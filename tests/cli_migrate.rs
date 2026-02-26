@@ -20,8 +20,8 @@ fn fresh_init_sets_latest_version() {
     let version: u32 = conn
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    // Version should be 2 (migration 0001 + 0002).
-    assert_eq!(version, 2);
+    // Version should be 3 (migration 0001 + 0002 + 0003).
+    assert_eq!(version, 3);
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn legacy_db_is_migrated_on_open() {
     let version: u32 = conn
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
 }
 
 #[test]
@@ -102,4 +102,99 @@ fn effort_column_exists_after_init() {
         })
         .unwrap();
     assert_eq!(effort, 3);
+}
+
+#[test]
+fn blocker_fk_rejects_nonexistent_blocker_id() {
+    let tmp = init_tmp();
+    let conn = rusqlite::Connection::open(tmp.path().join(".td/tasks.db")).unwrap();
+    conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+
+    conn.execute(
+        "INSERT INTO tasks (id, title, created, updated) \
+         VALUES ('td-real', 'Real task', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+
+    // Inserting a blocker that references a nonexistent task should fail.
+    let result = conn.execute(
+        "INSERT INTO blockers (task_id, blocker_id) VALUES ('td-real', 'td-ghost')",
+        [],
+    );
+    assert!(
+        result.is_err(),
+        "expected FK violation for nonexistent blocker_id"
+    );
+}
+
+#[test]
+fn migration_cleans_dangling_blocker_ids() {
+    let tmp = TempDir::new().unwrap();
+    let td_dir = tmp.path().join(".td");
+    std::fs::create_dir_all(&td_dir).unwrap();
+
+    // Create a v2 database (pre-0003) with a dangling blocker_id.
+    let conn = rusqlite::Connection::open(td_dir.join("tasks.db")).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE tasks (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            type TEXT DEFAULT 'task',
+            priority INTEGER DEFAULT 2,
+            status TEXT DEFAULT 'open',
+            parent TEXT DEFAULT '',
+            created TEXT NOT NULL,
+            updated TEXT NOT NULL,
+            effort INTEGER NOT NULL DEFAULT 2
+        );
+        CREATE TABLE labels (
+            task_id TEXT, label TEXT,
+            PRIMARY KEY (task_id, label),
+            FOREIGN KEY (task_id) REFERENCES tasks(id)
+        );
+        CREATE TABLE blockers (
+            task_id TEXT, blocker_id TEXT,
+            PRIMARY KEY (task_id, blocker_id),
+            FOREIGN KEY (task_id) REFERENCES tasks(id)
+        );
+        INSERT INTO tasks (id, title, created, updated)
+            VALUES ('td-a', 'Task A', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z');
+        INSERT INTO tasks (id, title, created, updated)
+            VALUES ('td-b', 'Task B', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z');
+        -- Valid blocker
+        INSERT INTO blockers (task_id, blocker_id) VALUES ('td-a', 'td-b');
+        -- Dangling blocker referencing a task that doesn't exist
+        INSERT INTO blockers (task_id, blocker_id) VALUES ('td-a', 'td-gone');
+        PRAGMA user_version = 2;",
+    )
+    .unwrap();
+    drop(conn);
+
+    // Running any command triggers migration.
+    td().args(["--json", "list"])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    // The valid blocker should survive; the dangling one should be gone.
+    let conn = rusqlite::Connection::open(td_dir.join("tasks.db")).unwrap();
+    let count: i32 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM blockers WHERE task_id = 'td-a'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 1, "only the valid blocker should remain");
+
+    let blocker: String = conn
+        .query_row(
+            "SELECT blocker_id FROM blockers WHERE task_id = 'td-a'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(blocker, "td-b");
 }

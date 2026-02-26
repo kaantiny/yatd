@@ -33,6 +33,12 @@ static MIGRATIONS: &[Migration] = &[
         post_hook_up: None,
         post_hook_down: None,
     },
+    Migration {
+        up_sql: include_str!("migrations/0003_blocker_fk.up.sql"),
+        down_sql: include_str!("migrations/0003_blocker_fk.down.sql"),
+        post_hook_up: None,
+        post_hook_down: None,
+    },
 ];
 
 /// Read the current schema version from the database.

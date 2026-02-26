@@ -179,3 +179,27 @@ fn dep_add_allows_diamond_without_cycle() {
     let blockers = t["blockers"].as_array().unwrap();
     assert_eq!(blockers.len(), 2);
 }
+
+#[test]
+fn dep_add_rejects_nonexistent_child() {
+    let tmp = init_tmp();
+    let real = create_task(&tmp, "Real task");
+
+    td().args(["dep", "add", "td-ghost", &real])
+        .current_dir(&tmp)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("task 'td-ghost' not found"));
+}
+
+#[test]
+fn dep_add_rejects_nonexistent_parent() {
+    let tmp = init_tmp();
+    let real = create_task(&tmp, "Real task");
+
+    td().args(["dep", "add", &real, "td-phantom"])
+        .current_dir(&tmp)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("task 'td-phantom' not found"));
+}

@@ -9,6 +9,12 @@ pub fn run(root: &Path, action: &DepAction, json: bool) -> Result<()> {
 
     match action {
         DepAction::Add { child, parent } => {
+            if !db::task_exists(&conn, child)? {
+                bail!("task '{child}' not found");
+            }
+            if !db::task_exists(&conn, parent)? {
+                bail!("task '{parent}' not found");
+            }
             if db::would_cycle(&conn, parent, child)? {
                 bail!("adding dependency would create a cycle: {child} → {parent} → … → {child}");
             }

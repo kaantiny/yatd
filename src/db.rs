@@ -199,6 +199,14 @@ pub fn would_cycle(conn: &Connection, from: &str, to: &str) -> Result<bool> {
     Ok(false)
 }
 
+/// Check whether a task with the given ID exists.
+pub fn task_exists(conn: &Connection, id: &str) -> Result<bool> {
+    let count: i32 = conn.query_row("SELECT COUNT(*) FROM tasks WHERE id = ?1", [id], |r| {
+        r.get(0)
+    })?;
+    Ok(count > 0)
+}
+
 /// Load a full task with labels and blockers.
 pub fn load_task_detail(conn: &Connection, id: &str) -> Result<TaskDetail> {
     let task = conn.query_row(
