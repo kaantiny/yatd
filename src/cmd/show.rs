@@ -18,61 +18,69 @@ pub fn run(root: &Path, id: &str, json: bool) -> Result<()> {
 
     if json {
         println!("{}", serde_json::to_string(&detail)?);
-    } else {
-        let c = crate::color::stdout_theme();
-        let t = &detail.task;
-        println!("{}          id{} = {}", c.bold, c.reset, t.id);
-        println!("{}       title{} = {}", c.bold, c.reset, t.title);
-        println!("{}      status{} = {}", c.bold, c.reset, t.status);
-        println!(
-            "{}    priority{} = {}",
-            c.bold,
-            c.reset,
-            db::priority_label(t.priority)
-        );
-        println!(
-            "{}      effort{} = {}",
-            c.bold,
-            c.reset,
-            db::effort_label(t.effort)
-        );
-        println!("{}        type{} = {}", c.bold, c.reset, t.task_type);
-        if !t.description.is_empty() {
-            println!("{} description{} = {}", c.bold, c.reset, t.description);
-        }
-        println!("{}     created{} = {}", c.bold, c.reset, t.created);
-        println!("{}     updated{} = {}", c.bold, c.reset, t.updated);
-        if !detail.labels.is_empty() {
-            println!(
-                "{}      labels{} = {}",
-                c.bold,
-                c.reset,
-                detail.labels.join(",")
-            );
-        }
-        let (open_blockers, closed_blockers) = db::load_blockers_partitioned(&conn, &t.id)?;
-        let total = open_blockers.len() + closed_blockers.len();
-        if total > 0 {
-            let label = if total == 1 { "blocker" } else { "blockers" };
-            let all_closed = open_blockers.is_empty();
-            let mut ids: Vec<String> = Vec::new();
-            for id in &open_blockers {
-                ids.push(id.clone());
-            }
-            for id in &closed_blockers {
-                ids.push(format!("{id} [closed]"));
-            }
-
-            let value = if all_closed {
-                format!("[all closed] {}", ids.join(", "))
-            } else {
-                ids.join(", ")
-            };
-
-            // Right-align the label to match other fields (12 chars wide).
-            println!("{}{label:>12}{} = {value}", c.bold, c.reset);
-        }
+        return Ok(());
     }
+
+    let c = crate::color::stdout_theme();
+    let t = &detail.task;
+
+    // Title as a heading with status tag
+    println!(
+        "{}# {}{} {}[{}]{}",
+        c.bold, t.title, c.reset, c.yellow, t.status, c.reset
+    );
+
+    // Description as body text, only when present
+    if !t.description.is_empty() {
+        println!();
+        println!("{}", t.description);
+    }
+
+    // Metadata line: id · type · priority · effort
+    println!();
+    println!(
+        "{}{}{} · {} · {}{}{} priority · {}{}{} effort",
+        c.bold,
+        t.id,
+        c.reset,
+        t.task_type,
+        c.red,
+        db::priority_label(t.priority),
+        c.reset,
+        c.blue,
+        db::effort_label(t.effort),
+        c.reset,
+    );
+
+    // Labels, only when present
+    if !detail.labels.is_empty() {
+        println!("labels: {}", detail.labels.join(", "));
+    }
+
+    // Blockers, only when present
+    let (open_blockers, closed_blockers) = db::load_blockers_partitioned(&conn, &t.id)?;
+    let total = open_blockers.len() + closed_blockers.len();
+    if total > 0 {
+        let label = if total == 1 { "blocker" } else { "blockers" };
+        let mut ids: Vec<String> = Vec::new();
+        for id in &open_blockers {
+            ids.push(id.clone());
+        }
+        for id in &closed_blockers {
+            ids.push(format!("{id} [closed]"));
+        }
+
+        let value = if open_blockers.is_empty() {
+            format!("[all closed] {}", ids.join(", "))
+        } else {
+            ids.join(", ")
+        };
+
+        println!("{label}: {value}");
+    }
+
+    // Timestamps at the bottom
+    println!("created {} · updated {}", t.created, t.updated);
 
     Ok(())
 }
