@@ -80,6 +80,13 @@ td update td-a1b2c3 -p high -e low -t "Revised title" -d "Added context"
 td done td-a1b2c3 td-d4e5f6 # one or many
 td reopen td-a1b2c3
 
+# Delete tasks (always non-interactive)
+td rm td-a1b2c3                           # delete one or many IDs
+td rm td-a1b2c3 td-d4e5f6
+td rm --recursive td-parent               # required for deleting task trees
+td rm --force td-blocker                  # suppress dependent-unblocked warnings
+td --json rm td-a1b2c3                    # machine-readable deleted/unblocked IDs
+
 # Blocked by something else
 td dep add td-child td-blocker # child waits for blocker to close
 td dep rm td-child td-blocker

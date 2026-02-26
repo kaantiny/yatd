@@ -119,6 +119,21 @@ pub enum Command {
         ids: Vec<String>,
     },
 
+    /// Delete task(s)
+    Rm {
+        /// Skip warnings about dependents becoming unblocked
+        #[arg(short, long)]
+        force: bool,
+
+        /// Delete the whole subtree (task and descendants)
+        #[arg(short = 'r', long)]
+        recursive: bool,
+
+        /// Task IDs
+        #[arg(required = true)]
+        ids: Vec<String>,
+    },
+
     /// Reopen task(s)
     Reopen {
         /// Task IDs

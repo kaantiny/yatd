@@ -11,6 +11,7 @@ mod log;
 mod next;
 mod ready;
 mod reopen;
+mod rm;
 mod search;
 mod show;
 mod skill;
@@ -108,6 +109,14 @@ pub fn dispatch(cli: &Cli) -> Result<()> {
         Command::Done { ids } => {
             let root = require_root()?;
             done::run(&root, ids, cli.json)
+        }
+        Command::Rm {
+            force,
+            recursive,
+            ids,
+        } => {
+            let root = require_root()?;
+            rm::run(&root, ids, *recursive, *force, cli.json)
         }
         Command::Reopen { ids } => {
             let root = require_root()?;

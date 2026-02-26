@@ -45,6 +45,12 @@ static MIGRATIONS: &[Migration] = &[
         post_hook_up: None,
         post_hook_down: None,
     },
+    Migration {
+        up_sql: include_str!("migrations/0005_cascade_fks.up.sql"),
+        down_sql: include_str!("migrations/0005_cascade_fks.down.sql"),
+        post_hook_up: None,
+        post_hook_down: None,
+    },
 ];
 
 /// Read the current schema version from the database.

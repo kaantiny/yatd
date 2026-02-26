@@ -20,8 +20,8 @@ fn fresh_init_sets_latest_version() {
     let version: u32 = conn
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    // Version should be 4 (migration 0001 + 0002 + 0003 + 0004).
-    assert_eq!(version, 4);
+    // Version should be 5 (migration 0001 + 0002 + 0003 + 0004 + 0005).
+    assert_eq!(version, 5);
 }
 
 #[test]
@@ -33,7 +33,8 @@ fn legacy_db_is_migrated_on_open() {
     // Create a v0 database with the old schema (no effort column).
     let conn = rusqlite::Connection::open(td_dir.join("tasks.db")).unwrap();
     conn.execute_batch(
-        "CREATE TABLE tasks (
+        "PRAGMA foreign_keys = OFF;
+        CREATE TABLE tasks (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
             description TEXT DEFAULT '',
@@ -81,7 +82,7 @@ fn legacy_db_is_migrated_on_open() {
     let version: u32 = conn
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 4);
+    assert_eq!(version, 5);
 }
 
 #[test]
@@ -129,6 +130,89 @@ fn blocker_fk_rejects_nonexistent_blocker_id() {
 }
 
 #[test]
+fn labels_fk_cascades_on_task_delete() {
+    let tmp = init_tmp();
+    let conn = rusqlite::Connection::open(tmp.path().join(".td/tasks.db")).unwrap();
+    conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+
+    conn.execute(
+        "INSERT INTO tasks (id, title, created, updated) \
+         VALUES ('td-labeled', 'Labeled task', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO labels (task_id, label) VALUES ('td-labeled', 'urgent')",
+        [],
+    )
+    .unwrap();
+
+    conn.execute("DELETE FROM tasks WHERE id = 'td-labeled'", [])
+        .unwrap();
+
+    let label_count: i32 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM labels WHERE task_id = 'td-labeled'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        label_count, 0,
+        "labels should be deleted via ON DELETE CASCADE"
+    );
+}
+
+#[test]
+fn blockers_fk_cascades_on_task_delete() {
+    let tmp = init_tmp();
+    let conn = rusqlite::Connection::open(tmp.path().join(".td/tasks.db")).unwrap();
+    conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+
+    conn.execute(
+        "INSERT INTO tasks (id, title, created, updated) \
+         VALUES ('td-a', 'Task A', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO tasks (id, title, created, updated) \
+         VALUES ('td-b', 'Task B', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO tasks (id, title, created, updated) \
+         VALUES ('td-c', 'Task C', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+
+    // td-b appears as both task_id and blocker_id across these rows.
+    conn.execute(
+        "INSERT INTO blockers (task_id, blocker_id) VALUES ('td-b', 'td-a')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO blockers (task_id, blocker_id) VALUES ('td-c', 'td-b')",
+        [],
+    )
+    .unwrap();
+
+    conn.execute("DELETE FROM tasks WHERE id = 'td-b'", [])
+        .unwrap();
+
+    let blocker_count: i32 = conn
+        .query_row("SELECT COUNT(*) FROM blockers", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(
+        blocker_count, 0,
+        "rows referencing a deleted task should be deleted via ON DELETE CASCADE"
+    );
+}
+
+#[test]
 fn migration_cleans_dangling_blocker_ids() {
     let tmp = TempDir::new().unwrap();
     let td_dir = tmp.path().join(".td");
@@ -137,7 +221,8 @@ fn migration_cleans_dangling_blocker_ids() {
     // Create a v2 database (pre-0003) with a dangling blocker_id.
     let conn = rusqlite::Connection::open(td_dir.join("tasks.db")).unwrap();
     conn.execute_batch(
-        "CREATE TABLE tasks (
+        "PRAGMA foreign_keys = OFF;
+        CREATE TABLE tasks (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
             description TEXT DEFAULT '',
@@ -197,4 +282,82 @@ fn migration_cleans_dangling_blocker_ids() {
         )
         .unwrap();
     assert_eq!(blocker, "td-b");
+}
+
+#[test]
+fn migration_cleans_dangling_labels() {
+    let tmp = TempDir::new().unwrap();
+    let td_dir = tmp.path().join(".td");
+    std::fs::create_dir_all(&td_dir).unwrap();
+
+    // Create a v4 database (pre-0005) with a dangling label row.
+    let conn = rusqlite::Connection::open(td_dir.join("tasks.db")).unwrap();
+    conn.execute_batch(
+        "PRAGMA foreign_keys = OFF;
+        CREATE TABLE tasks (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            type TEXT DEFAULT 'task',
+            priority INTEGER DEFAULT 2,
+            status TEXT DEFAULT 'open',
+            parent TEXT DEFAULT '',
+            created TEXT NOT NULL,
+            updated TEXT NOT NULL,
+            effort INTEGER NOT NULL DEFAULT 2
+        );
+        CREATE TABLE labels (
+            task_id TEXT, label TEXT,
+            PRIMARY KEY (task_id, label),
+            FOREIGN KEY (task_id) REFERENCES tasks(id)
+        );
+        CREATE TABLE blockers (
+            task_id TEXT, blocker_id TEXT,
+            PRIMARY KEY (task_id, blocker_id),
+            FOREIGN KEY (task_id) REFERENCES tasks(id),
+            FOREIGN KEY (blocker_id) REFERENCES tasks(id)
+        );
+        CREATE TABLE task_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            body TEXT NOT NULL,
+            FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        );
+        INSERT INTO tasks (id, title, created, updated)
+            VALUES ('td-real', 'Real task', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z');
+        INSERT INTO labels (task_id, label) VALUES ('td-real', 'kept');
+        INSERT INTO labels (task_id, label) VALUES ('td-gone', 'orphan');
+        PRAGMA user_version = 4;",
+    )
+    .unwrap();
+    drop(conn);
+
+    // Running any command triggers migration to v5.
+    td().args(["--json", "list"])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    let conn = rusqlite::Connection::open(td_dir.join("tasks.db")).unwrap();
+    let kept_count: i32 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM labels WHERE task_id = 'td-real' AND label = 'kept'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(kept_count, 1, "valid label should survive migration");
+
+    let orphan_count: i32 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM labels WHERE task_id = 'td-gone'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        orphan_count, 0,
+        "dangling label should be removed during migration"
+    );
 }

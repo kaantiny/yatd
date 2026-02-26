@@ -31,8 +31,10 @@ Commands:
   create   Create a new task [aliases: add]
   list     List tasks [aliases: ls]
   show     Show task details
+  log      Append a work log entry to a task
   update   Update a task
   done     Mark task(s) as closed [aliases: close]
+  rm       Delete task(s)
   reopen   Reopen task(s)
   dep      Manage dependencies / blockers
   label    Manage labels
