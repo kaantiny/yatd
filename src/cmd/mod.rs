@@ -17,6 +17,7 @@ mod search;
 mod show;
 mod skill;
 mod stats;
+pub mod sync;
 mod update;
 mod r#use;
 
@@ -169,6 +170,10 @@ pub fn dispatch(cli: &Cli) -> Result<()> {
         Command::Import { file } => {
             let root = require_root()?;
             import::run(&root, file)
+        }
+        Command::Sync { code } => {
+            let root = require_root()?;
+            sync::run(&root, code.as_deref(), cli.json)
         }
         Command::Skill { dir } => skill::run(dir.as_deref()),
     }

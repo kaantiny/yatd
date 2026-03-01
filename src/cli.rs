@@ -204,6 +204,12 @@ pub enum Command {
         file: String,
     },
 
+    /// Sync project state with a peer via magic wormhole
+    Sync {
+        /// Wormhole code to connect to a peer (omit to generate one)
+        code: Option<String>,
+    },
+
     /// Install the agent skill file (SKILL.md)
     Skill {
         /// Skills directory (writes managing-tasks-with-td/SKILL.md inside)

@@ -331,6 +331,17 @@ impl Store {
         Ok(path)
     }
 
+    /// Persist pre-built delta bytes (e.g. received from a peer) as a new
+    /// change file without re-exporting from the doc.
+    pub fn save_raw_delta(&self, bytes: &[u8]) -> Result<PathBuf> {
+        let filename = format!("{}.loro", Ulid::new());
+        let path = project_dir(&self.root, &self.project)
+            .join(CHANGES_DIR)
+            .join(filename);
+        atomic_write_file(&path, bytes)?;
+        Ok(path)
+    }
+
     /// Return hydrated tasks, excluding tombstones.
     pub fn list_tasks(&self) -> Result<Vec<Task>> {
         self.list_tasks_inner(false)
