@@ -54,8 +54,6 @@ Options:
   -V, --version  Print version
 ```
 
-## Contributing
-
 ## Contributions
 
 Patch requests are in [amolith/llm-projects] on [pr.pico.sh]. You don't need a
