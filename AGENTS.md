@@ -9,9 +9,9 @@
 - Contributions are through pr.pico.sh. If you're asked to open a PR or contribute or review a PR or similar and you have the skill, read that. If you don't have the skill, somehow fetch the contents of `https://git.secluded.site/agent-skills/blob/main/skills/collaborating-through-pr-pico-sh/SKILL.md?raw=1`. It's markdown, but served as raw plain text, so curl or any other UA will do fine. If you're not contributing/reviewing yet, don't read it yet.
 
 ## Essential commands
-- Format: `make fmt`
+- Format: `jj fix` (rustfmt via repo-level jj config)
 - Lint (warnings are errors): `cargo clippy --quiet -- -D warnings`
-- Full local gate: `make ci` (runs fmt + check + test)
+- Verify after changes: `make verify` (formats, typechecks, lints, and tests in one pass)
 
 ## Implementation details
 - Initialization requirement: most commands call `require_root()` and fail unless `.td/` exists somewhere in current dir ancestry (`db::find_root`). Only `init` and `skill` avoid this path.
