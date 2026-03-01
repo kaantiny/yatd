@@ -53,3 +53,38 @@ Options:
   -h, --help     Print help
   -V, --version  Print version
 ```
+
+## Contributing
+
+## Contributions
+
+Patch requests are in [amolith/llm-projects] on [pr.pico.sh]. You don't need a
+new account to contribute, you don't need to fork this repo, you don't need to
+fiddle with `git send-email`, you don't need to faff with your email client to
+get `git request-pull` working...
+
+You just need:
+
+- Git
+- SSH
+- An SSH key
+
+If you're using LLM agents, you might instead want to give them [my pr.pico.sh
+skill].
+
+```sh
+# Clone this repo, make your changes, and commit them
+# Create a new patch request with
+git format-patch origin/main --stdout | ssh pr.pico.sh pr create amolith/llm-projects
+# After potential feedback, submit a revision to an existing patch request with
+git format-patch origin/main --stdout | ssh pr.pico.sh pr add {prID}
+# List patch requests
+ssh pr.pico.sh pr ls amolith/llm-projects
+```
+
+See "How do Patch Requests work?" on [pr.pico.sh]'s home page for a more
+complete example workflow.
+
+[amolith/llm-projects]: https://pr.pico.sh/r/amolith/llm-projects
+[pr.pico.sh]: https://pr.pico.sh
+[my pr.pico.sh skill]: https://git.secluded.site/agent-skills#:~:text=collaborating%2Dthrough%2Dpr%2Dpico%2Dsh
