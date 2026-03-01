@@ -8,7 +8,6 @@ use crate::color::{cell_bold, stdout_use_color};
 use crate::db;
 use crate::score::{self, Mode};
 
-/// Parse the mode string from the CLI.
 fn parse_mode(s: &str) -> Result<Mode> {
     match s {
         "impact" => Ok(Mode::Impact),
@@ -19,38 +18,38 @@ fn parse_mode(s: &str) -> Result<Mode> {
 
 pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool) -> Result<()> {
     let mode = parse_mode(mode_str)?;
-    let conn = db::open(root)?;
+    let store = db::open(root)?;
+    let all = store.list_tasks()?;
 
-    // Load all open tasks.
-    let mut stmt = conn.prepare(
-        "SELECT id, title, priority, effort
-         FROM tasks
-         WHERE status = 'open'",
-    )?;
-    let open_tasks: Vec<(String, String, i32, i32)> = stmt
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
-        .collect::<rusqlite::Result<_>>()?;
+    let open_tasks: Vec<(String, String, i32, i32)> = all
+        .iter()
+        .filter(|t| t.status == db::Status::Open)
+        .map(|t| {
+            (
+                t.id.as_str().to_string(),
+                t.title.clone(),
+                t.priority.score(),
+                t.effort.score(),
+            )
+        })
+        .collect();
 
-    // Load all blocker edges between open tasks.
-    let mut edge_stmt = conn.prepare(
-        "SELECT b.task_id, b.blocker_id
-         FROM blockers b
-         JOIN tasks t1 ON b.task_id = t1.id
-         JOIN tasks t2 ON b.blocker_id = t2.id
-         WHERE t1.status = 'open' AND t2.status = 'open'",
-    )?;
-    let edges: Vec<(String, String)> = edge_stmt
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
-        .collect::<rusqlite::Result<_>>()?;
+    let edges: Vec<(String, String)> = all
+        .iter()
+        .filter(|t| t.status == db::Status::Open)
+        .flat_map(|t| {
+            t.blockers
+                .iter()
+                .map(|b| (t.id.as_str().to_string(), b.as_str().to_string()))
+                .collect::<Vec<_>>()
+        })
+        .collect();
 
-    // Parents with at least one open subtask are not actionable work
-    // units — exclude them from candidates while keeping them in the
-    // graph for downstream scoring.
-    let mut parent_stmt =
-        conn.prepare("SELECT DISTINCT parent FROM tasks WHERE parent != '' AND status = 'open'")?;
-    let parents_with_open_children: HashSet<String> = parent_stmt
-        .query_map([], |r| r.get(0))?
-        .collect::<rusqlite::Result<_>>()?;
+    let parents_with_open_children: HashSet<String> = all
+        .iter()
+        .filter(|t| t.status == db::Status::Open)
+        .filter_map(|t| t.parent.as_ref().map(|p| p.as_str().to_string()))
+        .collect();
 
     let scored = score::rank(
         &open_tasks,
@@ -70,7 +69,7 @@ pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool)
     }
 
     if json {
-        let items: Vec<serde_json::Value> = scored
+        let out: Vec<_> = scored
             .iter()
             .enumerate()
             .map(|(i, s)| {
@@ -79,8 +78,8 @@ pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool)
                     "id": s.id,
                     "title": s.title,
                     "score": s.score,
-                    "priority": db::priority_label(s.priority),
-                    "effort": db::effort_label(s.effort),
+                    "priority": s.priority,
+                    "effort": s.effort,
                     "downstream_score": s.downstream_score,
                     "priority_weight": s.priority_weight,
                     "effort_weight": s.effort_weight,
@@ -89,7 +88,7 @@ pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool)
                 })
             })
             .collect();
-        println!("{}", serde_json::to_string(&items)?);
+        println!("{}", serde_json::to_string(&out)?);
     } else {
         let use_color = stdout_use_color();
         let mut table = Table::new();
@@ -107,38 +106,9 @@ pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool)
         println!("{table}");
 
         if verbose {
-            let mode_label = match mode {
-                Mode::Impact => "impact",
-                Mode::Effort => "effort",
-            };
-            println!();
-            println!("mode: {mode_label}");
             println!();
             for (i, s) in scored.iter().enumerate() {
                 println!("{}. {} — score: {:.2}", i + 1, s.id, s.score);
-                match mode {
-                    Mode::Impact => {
-                        println!(
-                            "   ({:.2} + 1.00) × {:.0} / {:.0}^0.25 = {:.2}",
-                            s.downstream_score, s.priority_weight, s.effort_weight, s.score
-                        );
-                    }
-                    Mode::Effort => {
-                        println!(
-                            "   ({:.2} × 0.25 + 1.00) × {:.0} / {:.0}² = {:.2}",
-                            s.downstream_score, s.priority_weight, s.effort_weight, s.score
-                        );
-                    }
-                }
-                let unblocked = if s.direct_unblocked == s.total_unblocked {
-                    format!("{} tasks", s.total_unblocked)
-                } else {
-                    format!(
-                        "{} tasks ({} directly)",
-                        s.total_unblocked, s.direct_unblocked
-                    )
-                };
-                println!("   Unblocks: {unblocked}");
             }
         }
     }

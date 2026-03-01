@@ -2,19 +2,25 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use tempfile::TempDir;
 
-fn td() -> Command {
-    Command::cargo_bin("td").unwrap()
+fn td(home: &TempDir) -> Command {
+    let mut cmd = Command::cargo_bin("td").unwrap();
+    cmd.env("HOME", home.path());
+    cmd
 }
 
 fn init_tmp() -> TempDir {
     let tmp = TempDir::new().unwrap();
-    td().arg("init").current_dir(&tmp).assert().success();
+    td(&tmp)
+        .args(["init", "main"])
+        .current_dir(&tmp)
+        .assert()
+        .success();
     tmp
 }
 
 /// Create a task and return its JSON id.
 fn create_task(dir: &TempDir, title: &str) -> String {
-    let out = td()
+    let out = td(dir)
         .args(["--json", "create", title])
         .current_dir(dir)
         .output()
@@ -31,7 +37,8 @@ fn list_shows_created_tasks() {
     create_task(&tmp, "Alpha");
     create_task(&tmp, "Bravo");
 
-    td().arg("list")
+    td(&tmp)
+        .arg("list")
         .current_dir(&tmp)
         .assert()
         .success()
@@ -44,7 +51,7 @@ fn list_json_returns_array() {
     let tmp = init_tmp();
     create_task(&tmp, "One");
 
-    let out = td()
+    let out = td(&tmp)
         .args(["--json", "list"])
         .current_dir(&tmp)
         .output()
@@ -61,7 +68,7 @@ fn list_filter_by_status() {
     create_task(&tmp, "Open task");
 
     // No closed tasks yet.
-    let out = td()
+    let out = td(&tmp)
         .args(["--json", "list", "-s", "closed"])
         .current_dir(&tmp)
         .output()
@@ -74,16 +81,18 @@ fn list_filter_by_status() {
 fn list_filter_by_priority() {
     let tmp = init_tmp();
 
-    td().args(["create", "Low prio", "-p", "low"])
+    td(&tmp)
+        .args(["create", "Low prio", "-p", "low"])
         .current_dir(&tmp)
         .assert()
         .success();
-    td().args(["create", "High prio", "-p", "high"])
+    td(&tmp)
+        .args(["create", "High prio", "-p", "high"])
         .current_dir(&tmp)
         .assert()
         .success();
 
-    let out = td()
+    let out = td(&tmp)
         .args(["--json", "list", "-p", "high"])
         .current_dir(&tmp)
         .output()
@@ -98,16 +107,18 @@ fn list_filter_by_priority() {
 fn list_filter_by_label() {
     let tmp = init_tmp();
 
-    td().args(["create", "Tagged", "-l", "urgent"])
+    td(&tmp)
+        .args(["create", "Tagged", "-l", "urgent"])
         .current_dir(&tmp)
         .assert()
         .success();
-    td().args(["create", "Untagged"])
+    td(&tmp)
+        .args(["create", "Untagged"])
         .current_dir(&tmp)
         .assert()
         .success();
 
-    let out = td()
+    let out = td(&tmp)
         .args(["--json", "list", "-l", "urgent"])
         .current_dir(&tmp)
         .output()
@@ -122,16 +133,18 @@ fn list_filter_by_label() {
 fn list_filter_by_effort() {
     let tmp = init_tmp();
 
-    td().args(["create", "Easy", "-e", "low"])
+    td(&tmp)
+        .args(["create", "Easy", "-e", "low"])
         .current_dir(&tmp)
         .assert()
         .success();
-    td().args(["create", "Hard", "-e", "high"])
+    td(&tmp)
+        .args(["create", "Hard", "-e", "high"])
         .current_dir(&tmp)
         .assert()
         .success();
 
-    let out = td()
+    let out = td(&tmp)
         .args(["--json", "list", "-e", "low"])
         .current_dir(&tmp)
         .output()
@@ -149,25 +162,27 @@ fn show_displays_task() {
     let tmp = init_tmp();
     let id = create_task(&tmp, "Details here");
 
-    td().args(["show", &id])
+    td(&tmp)
+        .args(["show", &id])
         .current_dir(&tmp)
         .assert()
         .success()
         .stdout(predicate::str::contains("Details here"))
-        .stdout(predicate::str::contains(&id));
+        .stdout(predicate::str::contains(&id[..7]));
 }
 
 #[test]
 fn show_json_includes_labels_and_blockers() {
     let tmp = init_tmp();
 
-    td().args(["create", "With labels", "-l", "bug,ui"])
+    td(&tmp)
+        .args(["create", "With labels", "-l", "bug,ui"])
         .current_dir(&tmp)
         .assert()
         .success();
 
     // Get the id via list.
-    let out = td()
+    let out = td(&tmp)
         .args(["--json", "list"])
         .current_dir(&tmp)
         .output()
@@ -175,7 +190,7 @@ fn show_json_includes_labels_and_blockers() {
     let list: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     let id = list[0]["id"].as_str().unwrap();
 
-    let out = td()
+    let out = td(&tmp)
         .args(["--json", "show", id])
         .current_dir(&tmp)
         .output()
@@ -195,7 +210,8 @@ fn show_json_includes_labels_and_blockers() {
 fn show_nonexistent_task_fails() {
     let tmp = init_tmp();
 
-    td().args(["show", "td-nope"])
+    td(&tmp)
+        .args(["show", "td-nope"])
         .current_dir(&tmp)
         .assert()
         .failure()
@@ -209,28 +225,33 @@ fn show_annotates_closed_blockers() {
     let open_blocker = create_task(&tmp, "Still open");
     let closed_blocker = create_task(&tmp, "Will close");
 
-    td().args(["dep", "add", &task, &open_blocker])
+    td(&tmp)
+        .args(["dep", "add", &task, &open_blocker])
         .current_dir(&tmp)
         .assert()
         .success();
-    td().args(["dep", "add", &task, &closed_blocker])
+    td(&tmp)
+        .args(["dep", "add", &task, &closed_blocker])
         .current_dir(&tmp)
         .assert()
         .success();
-    td().args(["done", &closed_blocker])
+    td(&tmp)
+        .args(["done", &closed_blocker])
         .current_dir(&tmp)
         .assert()
         .success();
 
     // Plural label, open blocker bare, closed one annotated.
-    td().args(["show", &task])
+    td(&tmp)
+        .args(["show", &task])
         .current_dir(&tmp)
         .assert()
         .success()
         .stdout(predicate::str::contains("blockers"))
-        .stdout(predicate::str::contains(&open_blocker))
+        .stdout(predicate::str::contains(&open_blocker[..7]))
         .stdout(predicate::str::contains(&format!(
-            "{closed_blocker} [closed]"
+            "{} [closed]",
+            &closed_blocker[..7]
         )));
 }
 
@@ -240,23 +261,26 @@ fn show_all_closed_blockers_prefixed() {
     let task = create_task(&tmp, "Was blocked");
     let blocker = create_task(&tmp, "Done now");
 
-    td().args(["dep", "add", &task, &blocker])
+    td(&tmp)
+        .args(["dep", "add", &task, &blocker])
         .current_dir(&tmp)
         .assert()
         .success();
-    td().args(["done", &blocker])
+    td(&tmp)
+        .args(["done", &blocker])
         .current_dir(&tmp)
         .assert()
         .success();
 
     // Singular label, [all closed] prefix.
-    td().args(["show", &task])
+    td(&tmp)
+        .args(["show", &task])
         .current_dir(&tmp)
         .assert()
         .success()
         .stdout(predicate::str::contains("blocker"))
         .stdout(predicate::str::contains("[all closed]"))
-        .stdout(predicate::str::contains(&blocker));
+        .stdout(predicate::str::contains(&blocker[..7]));
 }
 
 #[test]
@@ -265,12 +289,13 @@ fn show_single_open_blocker_singular_label() {
     let task = create_task(&tmp, "Blocked");
     let blocker = create_task(&tmp, "Blocking");
 
-    td().args(["dep", "add", &task, &blocker])
+    td(&tmp)
+        .args(["dep", "add", &task, &blocker])
         .current_dir(&tmp)
         .assert()
         .success();
 
-    let out = td()
+    let out = td(&tmp)
         .args(["show", &task])
         .current_dir(&tmp)
         .output()
@@ -279,7 +304,7 @@ fn show_single_open_blocker_singular_label() {
 
     // Singular "blocker", no "blockers".
     assert!(stdout.contains("blocker"));
-    assert!(stdout.contains(&blocker));
+    assert!(stdout.contains(&blocker[..7]));
     // Should not contain [closed] or [all closed].
     assert!(!stdout.contains("[closed]"));
 }

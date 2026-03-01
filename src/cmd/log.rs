@@ -1,38 +1,37 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
+use loro::LoroMap;
 use std::path::Path;
 
 use crate::db;
 
 pub fn run(root: &Path, id: &str, message: &str, json: bool) -> Result<()> {
-    let conn = db::open(root)?;
+    let store = db::open(root)?;
+    let task_id = db::resolve_task_id(&store, id, false)?;
+    let log_id = db::gen_id();
+    let ts = db::now_utc();
 
-    if !db::task_exists(&conn, id)? {
-        bail!("task {id} not found");
-    }
-
-    let timestamp = db::now_utc();
-    conn.execute(
-        "INSERT INTO task_logs (task_id, timestamp, body)
-         VALUES (?1, ?2, ?3)",
-        rusqlite::params![id, timestamp, message],
-    )?;
-    let log_id = conn.last_insert_rowid();
-    conn.execute(
-        "UPDATE tasks SET updated = ?1 WHERE id = ?2",
-        rusqlite::params![db::now_utc(), id],
-    )?;
+    store.apply_and_persist(|doc| {
+        let tasks = doc.get_map("tasks");
+        let task =
+            db::get_task_map(&tasks, &task_id)?.ok_or_else(|| anyhow::anyhow!("task not found"))?;
+        let logs = db::get_or_create_child_map(&task, "logs")?;
+        let entry = logs.insert_container(log_id.as_str(), LoroMap::new())?;
+        entry.insert("timestamp", ts.clone())?;
+        entry.insert("message", message)?;
+        task.insert("updated_at", ts.clone())?;
+        Ok(())
+    })?;
 
     let entry = db::LogEntry {
         id: log_id,
-        task_id: id.to_string(),
-        timestamp,
-        body: message.to_string(),
+        timestamp: ts,
+        message: message.to_string(),
     };
 
     if json {
         println!("{}", serde_json::to_string(&entry)?);
     } else {
-        println!("logged to {id}");
+        println!("logged to {}", task_id);
     }
 
     Ok(())

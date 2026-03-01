@@ -7,31 +7,19 @@ use crate::color::{cell_bold, stdout_use_color};
 use crate::db;
 
 pub fn run(root: &Path, query: &str, json: bool) -> Result<()> {
-    let conn = db::open(root)?;
-    let pattern = format!("%{query}%");
+    let store = db::open(root)?;
+    let q = query.to_lowercase();
 
-    let mut stmt = conn.prepare(
-        "SELECT id, title, description, type, priority, status, effort, parent, created, updated
-         FROM tasks
-         WHERE title LIKE ?1 OR description LIKE ?1",
-    )?;
-
-    let tasks: Vec<db::Task> = stmt
-        .query_map([&pattern], db::row_to_task)?
-        .collect::<rusqlite::Result<_>>()?;
+    let tasks: Vec<db::Task> = store
+        .list_tasks()?
+        .into_iter()
+        .filter(|t| {
+            t.title.to_lowercase().contains(&q) || t.description.to_lowercase().contains(&q)
+        })
+        .collect();
 
     if json {
-        let summary: Vec<serde_json::Value> = tasks
-            .iter()
-            .map(|t| {
-                serde_json::json!({
-                    "id": t.id,
-                    "title": t.title,
-                    "status": t.status,
-                })
-            })
-            .collect();
-        println!("{}", serde_json::to_string(&summary)?);
+        println!("{}", serde_json::to_string(&tasks)?);
     } else {
         let use_color = stdout_use_color();
         let mut table = Table::new();

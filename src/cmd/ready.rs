@@ -7,37 +7,23 @@ use crate::color::{cell_bold, cell_fg, stdout_use_color};
 use crate::db;
 
 pub fn run(root: &Path, json: bool) -> Result<()> {
-    let conn = db::open(root)?;
+    let store = db::open(root)?;
 
-    let mut stmt = conn.prepare(
-        "SELECT id, title, description, type, priority, status, effort, parent, created, updated
-         FROM tasks
-         WHERE status = 'open'
-           AND id NOT IN (
-               SELECT b.task_id FROM blockers b
-               JOIN tasks t ON b.blocker_id = t.id
-               WHERE t.status != 'closed'
-           )
-         ORDER BY priority, created",
-    )?;
+    let mut tasks = Vec::new();
+    for task in store.list_tasks()? {
+        if task.status != db::Status::Open {
+            continue;
+        }
+        let blockers = db::partition_blockers(&store, &task.blockers)?;
+        if blockers.open.is_empty() {
+            tasks.push(task);
+        }
+    }
 
-    let tasks: Vec<db::Task> = stmt
-        .query_map([], db::row_to_task)?
-        .collect::<rusqlite::Result<_>>()?;
+    tasks.sort_by_key(|t| (t.priority.score(), t.created_at.clone()));
 
     if json {
-        let summary: Vec<serde_json::Value> = tasks
-            .iter()
-            .map(|t| {
-                serde_json::json!({
-                    "id": t.id,
-                    "title": t.title,
-                    "priority": db::priority_label(t.priority),
-                    "effort": db::effort_label(t.effort),
-                })
-            })
-            .collect();
-        println!("{}", serde_json::to_string(&summary)?);
+        println!("{}", serde_json::to_string(&tasks)?);
     } else {
         let use_color = stdout_use_color();
         let mut table = Table::new();

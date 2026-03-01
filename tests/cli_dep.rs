@@ -2,18 +2,24 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use tempfile::TempDir;
 
-fn td() -> Command {
-    Command::cargo_bin("td").unwrap()
+fn td(home: &TempDir) -> Command {
+    let mut cmd = Command::cargo_bin("td").unwrap();
+    cmd.env("HOME", home.path());
+    cmd
 }
 
 fn init_tmp() -> TempDir {
     let tmp = TempDir::new().unwrap();
-    td().arg("init").current_dir(&tmp).assert().success();
+    td(&tmp)
+        .args(["init", "main"])
+        .current_dir(&tmp)
+        .assert()
+        .success();
     tmp
 }
 
 fn create_task(dir: &TempDir, title: &str) -> String {
-    let out = td()
+    let out = td(dir)
         .args(["--json", "create", title])
         .current_dir(dir)
         .output()
@@ -23,7 +29,7 @@ fn create_task(dir: &TempDir, title: &str) -> String {
 }
 
 fn get_task_json(dir: &TempDir, id: &str) -> serde_json::Value {
-    let out = td()
+    let out = td(dir)
         .args(["--json", "show", id])
         .current_dir(dir)
         .output()
@@ -37,7 +43,8 @@ fn dep_add_creates_blocker() {
     let a = create_task(&tmp, "Blocked task");
     let b = create_task(&tmp, "Blocker");
 
-    td().args(["dep", "add", &a, &b])
+    td(&tmp)
+        .args(["dep", "add", &a, &b])
         .current_dir(&tmp)
         .assert()
         .success()
@@ -54,11 +61,13 @@ fn dep_rm_removes_blocker() {
     let a = create_task(&tmp, "Was blocked");
     let b = create_task(&tmp, "Was blocker");
 
-    td().args(["dep", "add", &a, &b])
+    td(&tmp)
+        .args(["dep", "add", &a, &b])
         .current_dir(&tmp)
         .assert()
         .success();
-    td().args(["dep", "rm", &a, &b])
+    td(&tmp)
+        .args(["dep", "rm", &a, &b])
         .current_dir(&tmp)
         .assert()
         .success();
@@ -73,22 +82,30 @@ fn dep_tree_shows_children() {
     let tmp = init_tmp();
     let parent = create_task(&tmp, "Parent");
 
-    td().args(["create", "Child one", "--parent", &parent])
+    let out = td(&tmp)
+        .args(["--json", "create", "Subtask one", "--parent", &parent])
         .current_dir(&tmp)
-        .assert()
-        .success();
-    td().args(["create", "Child two", "--parent", &parent])
-        .current_dir(&tmp)
-        .assert()
-        .success();
+        .output()
+        .unwrap();
+    let subtask_one: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let subtask_one_id = subtask_one["id"].as_str().unwrap().to_string();
 
-    td().args(["dep", "tree", &parent])
+    let out = td(&tmp)
+        .args(["--json", "create", "Subtask two", "--parent", &parent])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let subtask_two: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let subtask_two_id = subtask_two["id"].as_str().unwrap().to_string();
+
+    td(&tmp)
+        .args(["dep", "tree", &parent])
         .current_dir(&tmp)
         .assert()
         .success()
-        .stdout(predicate::str::contains(&parent))
-        .stdout(predicate::str::contains(".1"))
-        .stdout(predicate::str::contains(".2"));
+        .stdout(predicate::str::contains(&parent[..7]))
+        .stdout(predicate::str::contains(&subtask_one_id[..7]))
+        .stdout(predicate::str::contains(&subtask_two_id[..7]));
 }
 
 #[test]
@@ -96,7 +113,8 @@ fn dep_add_rejects_self_cycle() {
     let tmp = init_tmp();
     let a = create_task(&tmp, "Self-referential");
 
-    td().args(["dep", "add", &a, &a])
+    td(&tmp)
+        .args(["dep", "add", &a, &a])
         .current_dir(&tmp)
         .assert()
         .failure()
@@ -110,13 +128,15 @@ fn dep_add_rejects_direct_cycle() {
     let b = create_task(&tmp, "Task B");
 
     // A blocked by B
-    td().args(["dep", "add", &a, &b])
+    td(&tmp)
+        .args(["dep", "add", &a, &b])
         .current_dir(&tmp)
         .assert()
         .success();
 
     // B blocked by A would create A → B → A
-    td().args(["dep", "add", &b, &a])
+    td(&tmp)
+        .args(["dep", "add", &b, &a])
         .current_dir(&tmp)
         .assert()
         .failure()
@@ -131,17 +151,20 @@ fn dep_add_rejects_transitive_cycle() {
     let c = create_task(&tmp, "Task C");
 
     // A blocked by B, B blocked by C
-    td().args(["dep", "add", &a, &b])
+    td(&tmp)
+        .args(["dep", "add", &a, &b])
         .current_dir(&tmp)
         .assert()
         .success();
-    td().args(["dep", "add", &b, &c])
+    td(&tmp)
+        .args(["dep", "add", &b, &c])
         .current_dir(&tmp)
         .assert()
         .success();
 
     // C blocked by A would create A → B → C → A
-    td().args(["dep", "add", &c, &a])
+    td(&tmp)
+        .args(["dep", "add", &c, &a])
         .current_dir(&tmp)
         .assert()
         .failure()
@@ -157,19 +180,23 @@ fn dep_add_allows_diamond_without_cycle() {
     let d = create_task(&tmp, "Task D");
 
     // Diamond: D blocked by B and C, both blocked by A
-    td().args(["dep", "add", &d, &b])
+    td(&tmp)
+        .args(["dep", "add", &d, &b])
         .current_dir(&tmp)
         .assert()
         .success();
-    td().args(["dep", "add", &d, &c])
+    td(&tmp)
+        .args(["dep", "add", &d, &c])
         .current_dir(&tmp)
         .assert()
         .success();
-    td().args(["dep", "add", &b, &a])
+    td(&tmp)
+        .args(["dep", "add", &b, &a])
         .current_dir(&tmp)
         .assert()
         .success();
-    td().args(["dep", "add", &c, &a])
+    td(&tmp)
+        .args(["dep", "add", &c, &a])
         .current_dir(&tmp)
         .assert()
         .success();
@@ -185,7 +212,8 @@ fn dep_add_rejects_nonexistent_child() {
     let tmp = init_tmp();
     let real = create_task(&tmp, "Real task");
 
-    td().args(["dep", "add", "td-ghost", &real])
+    td(&tmp)
+        .args(["dep", "add", "td-ghost", &real])
         .current_dir(&tmp)
         .assert()
         .failure()
@@ -197,7 +225,8 @@ fn dep_add_rejects_nonexistent_parent() {
     let tmp = init_tmp();
     let real = create_task(&tmp, "Real task");
 
-    td().args(["dep", "add", &real, "td-phantom"])
+    td(&tmp)
+        .args(["dep", "add", &real, "td-phantom"])
         .current_dir(&tmp)
         .assert()
         .failure()

@@ -1,27 +1,17 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use std::path::Path;
 
-pub fn run(root: &Path, stealth: bool, json: bool) -> Result<()> {
-    let td_dir = crate::db::td_dir(root);
-    if td_dir.exists() {
-        bail!("already initialized");
-    }
+pub fn run(root: &Path, name: &str, json: bool) -> Result<()> {
+    crate::db::init(root, name)?;
 
-    crate::db::init(root)?;
-
-    if stealth {
-        use std::io::Write;
-        let mut f = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(root.join(".gitignore"))?;
-        writeln!(f, ".td/")?;
-    }
-
-    let c = crate::color::stderr_theme();
-    eprintln!("{}info:{} initialized .td/", c.blue, c.reset);
     if json {
-        println!(r#"{{"success":true}}"#);
+        println!(
+            "{}",
+            serde_json::json!({"success": true, "project": name, "bound_path": root})
+        );
+    } else {
+        let c = crate::color::stderr_theme();
+        eprintln!("{}info:{} initialized project '{name}'", c.blue, c.reset);
     }
 
     Ok(())

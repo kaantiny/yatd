@@ -2,18 +2,24 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use tempfile::TempDir;
 
-fn td() -> Command {
-    Command::cargo_bin("td").unwrap()
+fn td(home: &TempDir) -> Command {
+    let mut cmd = Command::cargo_bin("td").unwrap();
+    cmd.env("HOME", home.path());
+    cmd
 }
 
 fn init_tmp() -> TempDir {
     let tmp = TempDir::new().unwrap();
-    td().arg("init").current_dir(&tmp).assert().success();
+    td(&tmp)
+        .args(["init", "main"])
+        .current_dir(&tmp)
+        .assert()
+        .success();
     tmp
 }
 
 fn create_task(dir: &TempDir, title: &str) -> String {
-    let out = td()
+    let out = td(dir)
         .args(["--json", "create", title])
         .current_dir(dir)
         .output()
@@ -23,7 +29,7 @@ fn create_task(dir: &TempDir, title: &str) -> String {
 }
 
 fn get_task_json(dir: &TempDir, id: &str) -> serde_json::Value {
-    let out = td()
+    let out = td(dir)
         .args(["--json", "show", id])
         .current_dir(dir)
         .output()
@@ -36,17 +42,15 @@ fn rm_deletes_task() {
     let tmp = init_tmp();
     let id = create_task(&tmp, "Delete me");
 
-    td().args(["rm", &id])
+    td(&tmp)
+        .args(["rm", &id])
         .current_dir(&tmp)
         .assert()
         .success()
         .stdout(predicate::str::contains("deleted"));
 
-    td().args(["show", &id])
-        .current_dir(&tmp)
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("not found"));
+    let task = get_task_json(&tmp, &id);
+    assert_eq!(task["status"].as_str().unwrap(), "closed");
 }
 
 #[test]
@@ -55,31 +59,28 @@ fn rm_deletes_multiple_ids() {
     let id1 = create_task(&tmp, "First");
     let id2 = create_task(&tmp, "Second");
 
-    td().args(["rm", &id1, &id2])
+    td(&tmp)
+        .args(["rm", &id1, &id2])
         .current_dir(&tmp)
         .assert()
         .success();
 
-    td().args(["show", &id1])
-        .current_dir(&tmp)
-        .assert()
-        .failure();
-    td().args(["show", &id2])
-        .current_dir(&tmp)
-        .assert()
-        .failure();
+    assert_eq!(get_task_json(&tmp, &id1)["status"], "closed");
+    assert_eq!(get_task_json(&tmp, &id2)["status"], "closed");
 }
 
 #[test]
 fn rm_requires_recursive_for_parent_task() {
     let tmp = init_tmp();
     let parent = create_task(&tmp, "Parent");
-    td().args(["create", "Child", "--parent", &parent])
+    td(&tmp)
+        .args(["create", "Child", "--parent", &parent])
         .current_dir(&tmp)
         .assert()
         .success();
 
-    td().args(["rm", &parent])
+    td(&tmp)
+        .args(["rm", &parent])
         .current_dir(&tmp)
         .assert()
         .failure()
@@ -91,35 +92,31 @@ fn rm_recursive_deletes_subtree() {
     let tmp = init_tmp();
     let parent = create_task(&tmp, "Parent");
 
-    td().args(["create", "Child", "--parent", &parent])
+    let out = td(&tmp)
+        .args(["--json", "create", "Child", "--parent", &parent])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let child: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let child_id = child["id"].as_str().unwrap().to_string();
+
+    let out = td(&tmp)
+        .args(["--json", "create", "Grandchild", "--parent", &child_id])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let grandchild: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let grandchild_id = grandchild["id"].as_str().unwrap().to_string();
+
+    td(&tmp)
+        .args(["rm", "--recursive", &parent])
         .current_dir(&tmp)
         .assert()
         .success();
-    let child_id = format!("{parent}.1");
 
-    td().args(["create", "Grandchild", "--parent", &child_id])
-        .current_dir(&tmp)
-        .assert()
-        .success();
-    let grandchild_id = format!("{child_id}.1");
-
-    td().args(["rm", "--recursive", &parent])
-        .current_dir(&tmp)
-        .assert()
-        .success();
-
-    td().args(["show", &parent])
-        .current_dir(&tmp)
-        .assert()
-        .failure();
-    td().args(["show", &child_id])
-        .current_dir(&tmp)
-        .assert()
-        .failure();
-    td().args(["show", &grandchild_id])
-        .current_dir(&tmp)
-        .assert()
-        .failure();
+    assert_eq!(get_task_json(&tmp, &parent)["status"], "closed");
+    assert_eq!(get_task_json(&tmp, &child_id)["status"], "closed");
+    assert_eq!(get_task_json(&tmp, &grandchild_id)["status"], "closed");
 }
 
 #[test]
@@ -128,12 +125,14 @@ fn rm_detaches_dependents_and_warns() {
     let dependent = create_task(&tmp, "Dependent");
     let blocker = create_task(&tmp, "Blocker");
 
-    td().args(["dep", "add", &dependent, &blocker])
+    td(&tmp)
+        .args(["dep", "add", &dependent, &blocker])
         .current_dir(&tmp)
         .assert()
         .success();
 
-    td().args(["rm", &blocker])
+    td(&tmp)
+        .args(["rm", &blocker])
         .current_dir(&tmp)
         .assert()
         .success()
@@ -151,12 +150,14 @@ fn rm_force_suppresses_unblocked_warning() {
     let dependent = create_task(&tmp, "Dependent");
     let blocker = create_task(&tmp, "Blocker");
 
-    td().args(["dep", "add", &dependent, &blocker])
+    td(&tmp)
+        .args(["dep", "add", &dependent, &blocker])
         .current_dir(&tmp)
         .assert()
         .success();
 
-    td().args(["rm", "--force", &blocker])
+    td(&tmp)
+        .args(["rm", "--force", &blocker])
         .current_dir(&tmp)
         .assert()
         .success()
@@ -169,12 +170,13 @@ fn rm_json_includes_deleted_and_unblocked_ids() {
     let dependent = create_task(&tmp, "Dependent");
     let blocker = create_task(&tmp, "Blocker");
 
-    td().args(["dep", "add", &dependent, &blocker])
+    td(&tmp)
+        .args(["dep", "add", &dependent, &blocker])
         .current_dir(&tmp)
         .assert()
         .success();
 
-    let out = td()
+    let out = td(&tmp)
         .args(["--json", "rm", &blocker])
         .current_dir(&tmp)
         .output()

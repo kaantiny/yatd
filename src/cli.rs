@@ -7,18 +7,30 @@ pub struct Cli {
     #[arg(short = 'j', long = "json", global = true)]
     pub json: bool,
 
+    /// Select a project explicitly (overrides cwd binding)
+    #[arg(long, global = true)]
+    pub project: Option<String>,
+
     #[command(subcommand)]
     pub command: Command,
 }
 
 #[derive(Subcommand)]
 pub enum Command {
-    /// Initialize .td directory
+    /// Initialize a central project and bind the current directory to it
     Init {
-        /// Add .td/ to .gitignore
-        #[arg(long)]
-        stealth: bool,
+        /// Project name
+        name: String,
     },
+
+    /// Bind the current directory to an existing project
+    Use {
+        /// Project name
+        name: String,
+    },
+
+    /// List all known projects in central storage
+    Projects,
 
     /// Create a new task
     #[command(visible_alias = "add")]

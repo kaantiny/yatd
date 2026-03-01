@@ -9,6 +9,7 @@ mod label;
 mod list;
 mod log;
 mod next;
+mod projects;
 mod ready;
 mod reopen;
 mod rm;
@@ -17,21 +18,28 @@ mod show;
 mod skill;
 mod stats;
 mod update;
+mod r#use;
 
 use crate::cli::{Cli, Command};
 use crate::db;
 use anyhow::Result;
 
 fn require_root() -> Result<std::path::PathBuf> {
-    db::find_root(&std::env::current_dir()?)
+    std::env::current_dir().map_err(Into::into)
 }
 
 pub fn dispatch(cli: &Cli) -> Result<()> {
+    if let Some(project) = &cli.project {
+        std::env::set_var(db::PROJECT_ENV, project);
+    }
+
     match &cli.command {
-        Command::Init { stealth } => {
+        Command::Init { name } => {
             let root = std::env::current_dir()?;
-            init::run(&root, *stealth, cli.json)
+            init::run(&root, name, cli.json)
         }
+        Command::Use { name } => r#use::run(name, cli.json),
+        Command::Projects => projects::run(cli.json),
         Command::Create {
             title,
             priority,

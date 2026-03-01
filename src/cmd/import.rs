@@ -1,4 +1,5 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use loro::LoroMap;
 use serde::Deserialize;
 use std::io::BufRead;
 use std::path::Path;
@@ -14,46 +15,47 @@ struct ImportTask {
     #[serde(rename = "type", default = "default_type")]
     task_type: String,
     #[serde(default = "default_priority")]
-    priority: i32,
+    priority: String,
     #[serde(default = "default_status")]
     status: String,
     #[serde(default = "default_effort")]
-    effort: i32,
+    effort: String,
     #[serde(default)]
-    parent: String,
-    created: String,
-    updated: String,
+    parent: Option<String>,
+    created_at: String,
+    updated_at: String,
+    #[serde(default)]
+    deleted_at: Option<String>,
     #[serde(default)]
     labels: Vec<String>,
     #[serde(default)]
     blockers: Vec<String>,
     #[serde(default)]
-    logs: Vec<ImportLogEntry>,
+    logs: Vec<ImportLog>,
 }
 
 #[derive(Deserialize)]
-struct ImportLogEntry {
+struct ImportLog {
+    id: String,
     timestamp: String,
-    body: String,
+    message: String,
 }
 
 fn default_type() -> String {
     "task".into()
 }
-fn default_priority() -> i32 {
-    2
+fn default_priority() -> String {
+    "medium".into()
 }
 fn default_status() -> String {
     "open".into()
 }
-fn default_effort() -> i32 {
-    2
+fn default_effort() -> String {
+    "medium".into()
 }
 
 pub fn run(root: &Path, file: &str) -> Result<()> {
-    let conn = db::open(root)?;
-
-    eprintln!("info: importing from {file}...");
+    let store = db::open(root)?;
 
     let reader: Box<dyn BufRead> = if file == "-" {
         Box::new(std::io::stdin().lock())
@@ -66,55 +68,52 @@ pub fn run(root: &Path, file: &str) -> Result<()> {
         if line.trim().is_empty() {
             continue;
         }
-
         let t: ImportTask = serde_json::from_str(&line)?;
+        let id = db::TaskId::parse(&t.id)?;
+        db::parse_priority(&t.priority)?;
+        db::parse_status(&t.status)?;
+        db::parse_effort(&t.effort)?;
 
-        conn.execute(
-            "INSERT OR REPLACE INTO tasks
-             (id, title, description, type, priority, status, effort, parent, created, updated)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            rusqlite::params![
-                t.id,
-                t.title,
-                t.description,
-                t.task_type,
-                t.priority,
-                t.status,
-                t.effort,
-                t.parent,
-                t.created,
-                t.updated,
-            ],
-        )?;
+        store.apply_and_persist(|doc| {
+            let tasks = doc.get_map("tasks");
+            let task = if let Some(existing) = db::get_task_map(&tasks, &id)? {
+                existing
+            } else {
+                db::insert_task_map(&tasks, &id)?
+            };
 
-        // Replace labels.
-        conn.execute("DELETE FROM labels WHERE task_id = ?1", [&t.id])?;
-        for lbl in &t.labels {
-            conn.execute(
-                "INSERT INTO labels (task_id, label) VALUES (?1, ?2)",
-                [&t.id, lbl],
-            )?;
-        }
+            task.insert("title", t.title.clone())?;
+            task.insert("description", t.description.clone())?;
+            task.insert("type", t.task_type.clone())?;
+            task.insert("priority", t.priority.clone())?;
+            task.insert("status", t.status.clone())?;
+            task.insert("effort", t.effort.clone())?;
+            task.insert("parent", t.parent.as_deref().unwrap_or(""))?;
+            task.insert("created_at", t.created_at.clone())?;
+            task.insert("updated_at", t.updated_at.clone())?;
+            task.insert("deleted_at", t.deleted_at.as_deref().unwrap_or(""))?;
 
-        // Replace blockers.
-        conn.execute("DELETE FROM blockers WHERE task_id = ?1", [&t.id])?;
-        for blk in &t.blockers {
-            conn.execute(
-                "INSERT INTO blockers (task_id, blocker_id) VALUES (?1, ?2)",
-                [&t.id, blk],
-            )?;
-        }
-
-        // Replace logs.
-        conn.execute("DELETE FROM task_logs WHERE task_id = ?1", [&t.id])?;
-        for log in &t.logs {
-            conn.execute(
-                "INSERT INTO task_logs (task_id, timestamp, body) VALUES (?1, ?2, ?3)",
-                rusqlite::params![&t.id, &log.timestamp, &log.body],
-            )?;
-        }
+            let labels = task.insert_container("labels", LoroMap::new())?;
+            for lbl in &t.labels {
+                labels.insert(lbl, true)?;
+            }
+            let blockers = task.insert_container("blockers", LoroMap::new())?;
+            for blk in &t.blockers {
+                let parsed =
+                    db::TaskId::parse(blk).map_err(|_| anyhow!("invalid blocker id '{blk}'"))?;
+                blockers.insert(parsed.as_str(), true)?;
+            }
+            let logs = task.insert_container("logs", LoroMap::new())?;
+            for entry in &t.logs {
+                let log_id = db::TaskId::parse(&entry.id)
+                    .map_err(|_| anyhow!("invalid log id '{}'", entry.id))?;
+                let record = logs.insert_container(log_id.as_str(), LoroMap::new())?;
+                record.insert("timestamp", entry.timestamp.clone())?;
+                record.insert("message", entry.message.clone())?;
+            }
+            Ok(())
+        })?;
     }
 
-    eprintln!("info: import complete");
     Ok(())
 }

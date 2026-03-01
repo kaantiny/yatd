@@ -4,24 +4,22 @@ use std::path::Path;
 use crate::db;
 
 pub fn run(root: &Path) -> Result<()> {
-    let conn = db::open(root)?;
+    let store = db::open(root)?;
+    let tasks = store.list_tasks()?;
 
-    let total: i64 = conn.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get(0))?;
-    let open: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM tasks WHERE status = 'open'",
-        [],
-        |r| r.get(0),
-    )?;
-    let in_progress: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM tasks WHERE status = 'in_progress'",
-        [],
-        |r| r.get(0),
-    )?;
-    let closed: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM tasks WHERE status = 'closed'",
-        [],
-        |r| r.get(0),
-    )?;
+    let total = tasks.len();
+    let open = tasks
+        .iter()
+        .filter(|t| t.status == db::Status::Open)
+        .count();
+    let in_progress = tasks
+        .iter()
+        .filter(|t| t.status == db::Status::InProgress)
+        .count();
+    let closed = tasks
+        .iter()
+        .filter(|t| t.status == db::Status::Closed)
+        .count();
 
     println!(
         "{}",

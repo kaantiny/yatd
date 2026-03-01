@@ -1,19 +1,24 @@
 use assert_cmd::Command;
-use predicates::prelude::*;
 use tempfile::TempDir;
 
-fn td() -> Command {
-    Command::cargo_bin("td").unwrap()
+fn td(home: &TempDir) -> Command {
+    let mut cmd = Command::cargo_bin("td").unwrap();
+    cmd.env("HOME", home.path());
+    cmd
 }
 
 fn init_tmp() -> TempDir {
     let tmp = TempDir::new().unwrap();
-    td().arg("init").current_dir(&tmp).assert().success();
+    td(&tmp)
+        .args(["init", "main"])
+        .current_dir(&tmp)
+        .assert()
+        .success();
     tmp
 }
 
 fn create_task(dir: &TempDir, title: &str) -> String {
-    let out = td()
+    let out = td(dir)
         .args(["--json", "create", title])
         .current_dir(dir)
         .output()
@@ -28,7 +33,7 @@ fn export_produces_jsonl() {
     create_task(&tmp, "First");
     create_task(&tmp, "Second");
 
-    let out = td().arg("export").current_dir(&tmp).output().unwrap();
+    let out = td(&tmp).arg("export").current_dir(&tmp).output().unwrap();
     let stdout = String::from_utf8(out.stdout).unwrap();
     let lines: Vec<&str> = stdout.lines().collect();
     assert_eq!(lines.len(), 2, "expected 2 JSONL lines, got: {stdout}");
@@ -43,12 +48,13 @@ fn export_produces_jsonl() {
 #[test]
 fn export_includes_labels_and_blockers() {
     let tmp = init_tmp();
-    td().args(["create", "With labels", "-l", "bug"])
+    td(&tmp)
+        .args(["create", "With labels", "-l", "bug"])
         .current_dir(&tmp)
         .assert()
         .success();
 
-    let out = td().arg("export").current_dir(&tmp).output().unwrap();
+    let out = td(&tmp).arg("export").current_dir(&tmp).output().unwrap();
     let line = String::from_utf8(out.stdout).unwrap();
     let v: serde_json::Value = serde_json::from_str(line.trim()).unwrap();
     assert!(v["labels"].is_array());
@@ -60,13 +66,14 @@ fn import_round_trips_with_export() {
     let tmp = init_tmp();
     create_task(&tmp, "Alpha");
 
-    td().args(["create", "Bravo", "-l", "important"])
+    td(&tmp)
+        .args(["create", "Bravo", "-l", "important"])
         .current_dir(&tmp)
         .assert()
         .success();
 
     // Export.
-    let export_out = td().arg("export").current_dir(&tmp).output().unwrap();
+    let export_out = td(&tmp).arg("export").current_dir(&tmp).output().unwrap();
     let exported = String::from_utf8(export_out.stdout).unwrap();
 
     // Write to a file.
@@ -75,16 +82,20 @@ fn import_round_trips_with_export() {
 
     // Create a fresh directory, init, import.
     let tmp2 = TempDir::new().unwrap();
-    td().arg("init").current_dir(&tmp2).assert().success();
-
-    td().args(["import", export_file.to_str().unwrap()])
+    td(&tmp2)
+        .args(["init", "mirror"])
         .current_dir(&tmp2)
         .assert()
-        .success()
-        .stderr(predicate::str::contains("import complete"));
+        .success();
+
+    td(&tmp2)
+        .args(["import", export_file.to_str().unwrap()])
+        .current_dir(&tmp2)
+        .assert()
+        .success();
 
     // Verify tasks exist in the new database.
-    let out = td()
+    let out = td(&tmp2)
         .args(["--json", "list"])
         .current_dir(&tmp2)
         .output()
@@ -114,35 +125,41 @@ fn import_round_trips_with_export() {
 fn export_import_preserves_effort() {
     let tmp = init_tmp();
 
-    td().args(["create", "High effort", "-e", "high"])
+    td(&tmp)
+        .args(["create", "High effort", "-e", "high"])
         .current_dir(&tmp)
         .assert()
         .success();
 
     // Export.
-    let out = td().arg("export").current_dir(&tmp).output().unwrap();
+    let out = td(&tmp).arg("export").current_dir(&tmp).output().unwrap();
     let exported = String::from_utf8(out.stdout).unwrap();
 
     // Verify effort is in the JSONL.
     let v: serde_json::Value = serde_json::from_str(exported.trim()).unwrap();
-    assert_eq!(v["effort"].as_i64().unwrap(), 3);
+    assert_eq!(v["effort"].as_str().unwrap(), "high");
 
     // Round-trip into a fresh database.
     let export_file = tmp.path().join("effort.jsonl");
     std::fs::write(&export_file, &exported).unwrap();
 
     let tmp2 = TempDir::new().unwrap();
-    td().arg("init").current_dir(&tmp2).assert().success();
-    td().args(["import", export_file.to_str().unwrap()])
+    td(&tmp2)
+        .args(["init", "mirror"])
+        .current_dir(&tmp2)
+        .assert()
+        .success();
+    td(&tmp2)
+        .args(["import", export_file.to_str().unwrap()])
         .current_dir(&tmp2)
         .assert()
         .success();
 
-    let out2 = td()
+    let out2 = td(&tmp2)
         .args(["--json", "list"])
         .current_dir(&tmp2)
         .output()
         .unwrap();
     let v2: serde_json::Value = serde_json::from_slice(&out2.stdout).unwrap();
-    assert_eq!(v2[0]["effort"].as_i64().unwrap(), 3);
+    assert_eq!(v2[0]["effort"].as_str().unwrap(), "high");
 }

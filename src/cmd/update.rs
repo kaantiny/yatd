@@ -1,63 +1,55 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::path::Path;
 
 use crate::db;
 
 pub struct Opts<'a> {
     pub status: Option<&'a str>,
-    pub priority: Option<i32>,
-    pub effort: Option<i32>,
+    pub priority: Option<db::Priority>,
+    pub effort: Option<db::Effort>,
     pub title: Option<&'a str>,
     pub desc: Option<&'a str>,
     pub json: bool,
 }
 
 pub fn run(root: &Path, id: &str, opts: Opts) -> Result<()> {
-    let conn = db::open(root)?;
+    let store = db::open(root)?;
+    let task_id = db::resolve_task_id(&store, id, false)?;
     let ts = db::now_utc();
 
-    let mut sets = vec![format!("updated = '{ts}'")];
-    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
-    let mut idx = 1;
+    let parsed_status = opts.status.map(db::parse_status).transpose()?;
 
-    if let Some(s) = opts.status {
-        sets.push(format!("status = ?{idx}"));
-        params.push(Box::new(s.to_string()));
-        idx += 1;
-    }
-    if let Some(p) = opts.priority {
-        sets.push(format!("priority = ?{idx}"));
-        params.push(Box::new(p));
-        idx += 1;
-    }
-    if let Some(e) = opts.effort {
-        sets.push(format!("effort = ?{idx}"));
-        params.push(Box::new(e));
-        idx += 1;
-    }
-    if let Some(t) = opts.title {
-        sets.push(format!("title = ?{idx}"));
-        params.push(Box::new(t.to_string()));
-        idx += 1;
-    }
-    if let Some(d) = opts.desc {
-        sets.push(format!("description = ?{idx}"));
-        params.push(Box::new(d.to_string()));
-        idx += 1;
-    }
+    store.apply_and_persist(|doc| {
+        let tasks = doc.get_map("tasks");
+        let task = db::get_task_map(&tasks, &task_id)?.ok_or_else(|| anyhow!("task not found"))?;
 
-    let sql = format!("UPDATE tasks SET {} WHERE id = ?{idx}", sets.join(", "));
-    params.push(Box::new(id.to_string()));
-
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-    conn.execute(&sql, param_refs.as_slice())?;
+        if let Some(s) = parsed_status {
+            task.insert("status", db::status_label(s))?;
+        }
+        if let Some(p) = opts.priority {
+            task.insert("priority", db::priority_label(p))?;
+        }
+        if let Some(e) = opts.effort {
+            task.insert("effort", db::effort_label(e))?;
+        }
+        if let Some(t) = opts.title {
+            task.insert("title", t)?;
+        }
+        if let Some(d) = opts.desc {
+            task.insert("description", d)?;
+        }
+        task.insert("updated_at", ts.clone())?;
+        Ok(())
+    })?;
 
     if opts.json {
-        let detail = db::load_task_detail(&conn, id)?;
-        println!("{}", serde_json::to_string(&detail)?);
+        let task = store
+            .get_task(&task_id, false)?
+            .ok_or_else(|| anyhow!("task not found"))?;
+        println!("{}", serde_json::to_string(&task)?);
     } else {
         let c = crate::color::stdout_theme();
-        println!("{}updated{} {id}", c.green, c.reset);
+        println!("{}updated{} {}", c.green, c.reset, task_id);
     }
 
     Ok(())

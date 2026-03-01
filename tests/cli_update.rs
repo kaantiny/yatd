@@ -2,18 +2,24 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use tempfile::TempDir;
 
-fn td() -> Command {
-    Command::cargo_bin("td").unwrap()
+fn td(home: &TempDir) -> Command {
+    let mut cmd = Command::cargo_bin("td").unwrap();
+    cmd.env("HOME", home.path());
+    cmd
 }
 
 fn init_tmp() -> TempDir {
     let tmp = TempDir::new().unwrap();
-    td().arg("init").current_dir(&tmp).assert().success();
+    td(&tmp)
+        .args(["init", "main"])
+        .current_dir(&tmp)
+        .assert()
+        .success();
     tmp
 }
 
 fn create_task(dir: &TempDir, title: &str) -> String {
-    let out = td()
+    let out = td(dir)
         .args(["--json", "create", title])
         .current_dir(dir)
         .output()
@@ -23,7 +29,7 @@ fn create_task(dir: &TempDir, title: &str) -> String {
 }
 
 fn get_task_json(dir: &TempDir, id: &str) -> serde_json::Value {
-    let out = td()
+    let out = td(dir)
         .args(["--json", "show", id])
         .current_dir(dir)
         .output()
@@ -38,7 +44,8 @@ fn update_changes_status() {
     let tmp = init_tmp();
     let id = create_task(&tmp, "In progress");
 
-    td().args(["update", &id, "-s", "in_progress"])
+    td(&tmp)
+        .args(["update", &id, "-s", "in_progress"])
         .current_dir(&tmp)
         .assert()
         .success()
@@ -53,13 +60,14 @@ fn update_changes_priority() {
     let tmp = init_tmp();
     let id = create_task(&tmp, "Reprioritise");
 
-    td().args(["update", &id, "-p", "high"])
+    td(&tmp)
+        .args(["update", &id, "-p", "high"])
         .current_dir(&tmp)
         .assert()
         .success();
 
     let t = get_task_json(&tmp, &id);
-    assert_eq!(t["priority"].as_i64().unwrap(), 1);
+    assert_eq!(t["priority"].as_str().unwrap(), "high");
 }
 
 #[test]
@@ -67,7 +75,8 @@ fn update_changes_title() {
     let tmp = init_tmp();
     let id = create_task(&tmp, "Old title");
 
-    td().args(["update", &id, "-t", "New title"])
+    td(&tmp)
+        .args(["update", &id, "-t", "New title"])
         .current_dir(&tmp)
         .assert()
         .success();
@@ -81,7 +90,8 @@ fn update_changes_description() {
     let tmp = init_tmp();
     let id = create_task(&tmp, "Describe me");
 
-    td().args(["update", &id, "-d", "Now with details"])
+    td(&tmp)
+        .args(["update", &id, "-d", "Now with details"])
         .current_dir(&tmp)
         .assert()
         .success();
@@ -95,13 +105,13 @@ fn update_json_returns_task() {
     let tmp = init_tmp();
     let id = create_task(&tmp, "JSON update");
 
-    let out = td()
+    let out = td(&tmp)
         .args(["--json", "update", &id, "-p", "high"])
         .current_dir(&tmp)
         .output()
         .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(v["priority"].as_i64().unwrap(), 1);
+    assert_eq!(v["priority"].as_str().unwrap(), "high");
 }
 
 #[test]
@@ -109,13 +119,14 @@ fn update_changes_effort() {
     let tmp = init_tmp();
     let id = create_task(&tmp, "Re-estimate");
 
-    td().args(["update", &id, "-e", "high"])
+    td(&tmp)
+        .args(["update", &id, "-e", "high"])
         .current_dir(&tmp)
         .assert()
         .success();
 
     let t = get_task_json(&tmp, &id);
-    assert_eq!(t["effort"].as_i64().unwrap(), 3);
+    assert_eq!(t["effort"].as_str().unwrap(), "high");
 }
 
 // ── done ─────────────────────────────────────────────────────────────
@@ -125,7 +136,8 @@ fn done_closes_task() {
     let tmp = init_tmp();
     let id = create_task(&tmp, "Close me");
 
-    td().args(["done", &id])
+    td(&tmp)
+        .args(["done", &id])
         .current_dir(&tmp)
         .assert()
         .success()
@@ -141,7 +153,8 @@ fn done_closes_multiple_tasks() {
     let id1 = create_task(&tmp, "First");
     let id2 = create_task(&tmp, "Second");
 
-    td().args(["done", &id1, &id2])
+    td(&tmp)
+        .args(["done", &id1, &id2])
         .current_dir(&tmp)
         .assert()
         .success();
@@ -157,13 +170,15 @@ fn reopen_reopens_closed_task() {
     let tmp = init_tmp();
     let id = create_task(&tmp, "Reopen me");
 
-    td().args(["done", &id])
+    td(&tmp)
+        .args(["done", &id])
         .current_dir(&tmp)
         .assert()
         .success();
     assert_eq!(get_task_json(&tmp, &id)["status"], "closed");
 
-    td().args(["reopen", &id])
+    td(&tmp)
+        .args(["reopen", &id])
         .current_dir(&tmp)
         .assert()
         .success()

@@ -1,6 +1,6 @@
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use serde::Serialize;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::path::Path;
 
 use crate::db;
@@ -13,40 +13,64 @@ struct RmResult {
 }
 
 pub fn run(root: &Path, ids: &[String], recursive: bool, force: bool, json: bool) -> Result<()> {
-    let mut conn = db::open(root)?;
-    let tx = conn.transaction()?;
+    let store = db::open(root)?;
+    let all = store.list_tasks_unfiltered()?;
 
     let mut to_delete = BTreeSet::new();
-    for id in ids {
-        if !db::task_exists(&tx, id)? {
-            bail!("task '{id}' not found");
-        }
-
+    for raw in ids {
+        let id = db::resolve_task_id(&store, raw, false)?;
         if recursive {
-            for subtree_id in load_subtree_ids(&tx, id)? {
-                to_delete.insert(subtree_id);
-            }
+            collect_subtree(&all, &id, &mut to_delete);
         } else {
-            let child_count: i64 = tx.query_row(
-                "SELECT COUNT(*) FROM tasks WHERE parent = ?1",
-                [id],
-                |row| row.get(0),
-            )?;
-            if child_count > 0 {
+            if all
+                .iter()
+                .any(|t| t.parent.as_ref() == Some(&id) && t.deleted_at.is_none())
+            {
                 bail!("task '{id}' has children; use --recursive to delete subtree");
             }
-            to_delete.insert(id.clone());
+            to_delete.insert(id);
         }
     }
 
-    let deleted_ids: Vec<String> = to_delete.into_iter().collect();
-    let unblocked_ids = detach_dependents(&tx, &deleted_ids)?;
+    let deleted_ids: Vec<db::TaskId> = to_delete.into_iter().collect();
+    let deleted_set: HashSet<String> = deleted_ids
+        .iter()
+        .map(|id| id.as_str().to_string())
+        .collect();
 
-    if !deleted_ids.is_empty() {
-        delete_tasks(&tx, &deleted_ids)?;
-    }
+    let unblocked_ids: Vec<String> = all
+        .iter()
+        .filter(|t| !deleted_set.contains(t.id.as_str()))
+        .filter(|t| t.blockers.iter().any(|b| deleted_set.contains(b.as_str())))
+        .map(|t| t.id.as_str().to_string())
+        .collect();
 
-    tx.commit()?;
+    let ts = db::now_utc();
+    store.apply_and_persist(|doc| {
+        let tasks = doc.get_map("tasks");
+
+        for task_id in &deleted_ids {
+            let task =
+                db::get_task_map(&tasks, task_id)?.ok_or_else(|| anyhow!("task not found"))?;
+            task.insert("deleted_at", ts.clone())?;
+            task.insert("updated_at", ts.clone())?;
+            task.insert("status", db::status_label(db::Status::Closed))?;
+        }
+
+        for task in store.list_tasks_unfiltered()? {
+            if deleted_set.contains(task.id.as_str()) {
+                continue;
+            }
+            if let Some(task_map) = db::get_task_map(&tasks, &task.id)? {
+                let blockers = db::get_or_create_child_map(&task_map, "blockers")?;
+                for deleted in &deleted_ids {
+                    blockers.delete(deleted.as_str())?;
+                }
+            }
+        }
+
+        Ok(())
+    })?;
 
     if !force && !unblocked_ids.is_empty() {
         eprintln!(
@@ -58,13 +82,16 @@ pub fn run(root: &Path, ids: &[String], recursive: bool, force: bool, json: bool
     if json {
         let out = RmResult {
             requested_ids: ids.to_vec(),
-            deleted_ids,
+            deleted_ids: deleted_ids
+                .iter()
+                .map(|id| id.as_str().to_string())
+                .collect(),
             unblocked_ids,
         };
         println!("{}", serde_json::to_string(&out)?);
     } else {
         let c = crate::color::stdout_theme();
-        for id in &deleted_ids {
+        for id in deleted_ids {
             println!("{}deleted{} {id}", c.green, c.reset);
         }
     }
@@ -72,70 +99,13 @@ pub fn run(root: &Path, ids: &[String], recursive: bool, force: bool, json: bool
     Ok(())
 }
 
-fn load_subtree_ids(tx: &rusqlite::Transaction, root_id: &str) -> Result<Vec<String>> {
-    let mut stmt = tx.prepare(
-        "WITH RECURSIVE subtree(id) AS (
-             SELECT id FROM tasks WHERE id = ?1
-             UNION ALL
-             SELECT tasks.id
-             FROM tasks
-             JOIN subtree ON tasks.parent = subtree.id
-         )
-         SELECT id FROM subtree",
-    )?;
-    let ids = stmt
-        .query_map([root_id], |row| row.get(0))?
-        .collect::<rusqlite::Result<Vec<String>>>()?;
-    Ok(ids)
-}
-
-fn detach_dependents(tx: &rusqlite::Transaction, deleted_ids: &[String]) -> Result<Vec<String>> {
-    if deleted_ids.is_empty() {
-        return Ok(Vec::new());
+fn collect_subtree(all: &[db::Task], root: &db::TaskId, out: &mut BTreeSet<db::TaskId>) {
+    if !out.insert(root.clone()) {
+        return;
     }
-
-    let in_placeholders = vec!["?"; deleted_ids.len()].join(", ");
-    let sql = format!(
-        "SELECT DISTINCT task_id
-         FROM blockers
-         WHERE blocker_id IN ({in_placeholders})
-           AND task_id NOT IN ({in_placeholders})
-         ORDER BY task_id"
-    );
-    let params = deleted_ids.iter().chain(deleted_ids.iter());
-    let mut stmt = tx.prepare(&sql)?;
-    let unblocked_ids = stmt
-        .query_map(rusqlite::params_from_iter(params), |row| row.get(0))?
-        .collect::<rusqlite::Result<Vec<String>>>()?;
-
-    if unblocked_ids.is_empty() {
-        return Ok(unblocked_ids);
+    for task in all {
+        if task.parent.as_ref() == Some(root) && task.deleted_at.is_none() {
+            collect_subtree(all, &task.id, out);
+        }
     }
-
-    let delete_sql = format!(
-        "DELETE FROM blockers
-         WHERE blocker_id IN ({in_placeholders})
-           AND task_id NOT IN ({in_placeholders})"
-    );
-    let delete_params = deleted_ids.iter().chain(deleted_ids.iter());
-    tx.execute(&delete_sql, rusqlite::params_from_iter(delete_params))?;
-
-    let update_placeholders = vec!["?"; unblocked_ids.len()].join(", ");
-    let update_sql = format!(
-        "UPDATE tasks
-         SET updated = ?1
-         WHERE id IN ({update_placeholders})"
-    );
-    let ts = db::now_utc();
-    let update_params = std::iter::once(&ts).chain(unblocked_ids.iter());
-    tx.execute(&update_sql, rusqlite::params_from_iter(update_params))?;
-
-    Ok(unblocked_ids)
-}
-
-fn delete_tasks(tx: &rusqlite::Transaction, deleted_ids: &[String]) -> Result<()> {
-    let in_placeholders = vec!["?"; deleted_ids.len()].join(", ");
-    let sql = format!("DELETE FROM tasks WHERE id IN ({in_placeholders})");
-    tx.execute(&sql, rusqlite::params_from_iter(deleted_ids.iter()))?;
-    Ok(())
 }

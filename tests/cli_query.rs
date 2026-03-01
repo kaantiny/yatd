@@ -2,18 +2,24 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use tempfile::TempDir;
 
-fn td() -> Command {
-    Command::cargo_bin("td").unwrap()
+fn td(home: &TempDir) -> Command {
+    let mut cmd = Command::cargo_bin("td").unwrap();
+    cmd.env("HOME", home.path());
+    cmd
 }
 
 fn init_tmp() -> TempDir {
     let tmp = TempDir::new().unwrap();
-    td().arg("init").current_dir(&tmp).assert().success();
+    td(&tmp)
+        .args(["init", "main"])
+        .current_dir(&tmp)
+        .assert()
+        .success();
     tmp
 }
 
 fn create_task(dir: &TempDir, title: &str) -> String {
-    let out = td()
+    let out = td(dir)
         .args(["--json", "create", title])
         .current_dir(dir)
         .output()
@@ -30,7 +36,8 @@ fn search_matches_title() {
     create_task(&tmp, "Fix login page");
     create_task(&tmp, "Update docs");
 
-    td().args(["search", "login"])
+    td(&tmp)
+        .args(["search", "login"])
         .current_dir(&tmp)
         .assert()
         .success()
@@ -41,12 +48,14 @@ fn search_matches_title() {
 fn search_matches_description() {
     let tmp = init_tmp();
 
-    td().args(["create", "Vague title", "-d", "The frobnicator is broken"])
+    td(&tmp)
+        .args(["create", "Vague title", "-d", "The frobnicator is broken"])
         .current_dir(&tmp)
         .assert()
         .success();
 
-    td().args(["search", "frobnicator"])
+    td(&tmp)
+        .args(["search", "frobnicator"])
         .current_dir(&tmp)
         .assert()
         .success()
@@ -58,7 +67,7 @@ fn search_json_returns_array() {
     let tmp = init_tmp();
     create_task(&tmp, "Needle in haystack");
 
-    let out = td()
+    let out = td(&tmp)
         .args(["--json", "search", "Needle"])
         .current_dir(&tmp)
         .output()
@@ -73,16 +82,17 @@ fn search_json_returns_array() {
 #[test]
 fn ready_excludes_blocked_tasks() {
     let tmp = init_tmp();
-    let a = create_task(&tmp, "Ready task");
+    let _a = create_task(&tmp, "Ready task");
     let b = create_task(&tmp, "Blocked task");
     let c = create_task(&tmp, "Blocker task");
 
-    td().args(["dep", "add", &b, &c])
+    td(&tmp)
+        .args(["dep", "add", &b, &c])
         .current_dir(&tmp)
         .assert()
         .success();
 
-    let out = td()
+    let out = td(&tmp)
         .args(["--json", "ready"])
         .current_dir(&tmp)
         .output()
@@ -100,9 +110,13 @@ fn ready_excludes_blocked_tasks() {
     assert!(!titles.contains(&"Blocked task"));
 
     // Close the blocker — now the blocked task should become ready.
-    td().args(["done", &c]).current_dir(&tmp).assert().success();
+    td(&tmp)
+        .args(["done", &c])
+        .current_dir(&tmp)
+        .assert()
+        .success();
 
-    let out = td()
+    let out = td(&tmp)
         .args(["--json", "ready"])
         .current_dir(&tmp)
         .output()
@@ -126,12 +140,13 @@ fn stats_counts_tasks() {
     let tmp = init_tmp();
     let id = create_task(&tmp, "Open one");
     create_task(&tmp, "Open two");
-    td().args(["done", &id])
+    td(&tmp)
+        .args(["done", &id])
         .current_dir(&tmp)
         .assert()
         .success();
 
-    let out = td().args(["stats"]).current_dir(&tmp).output().unwrap();
+    let out = td(&tmp).args(["stats"]).current_dir(&tmp).output().unwrap();
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(v["total"].as_i64().unwrap(), 2);
     assert_eq!(v["open"].as_i64().unwrap(), 1);
@@ -145,9 +160,10 @@ fn compact_succeeds() {
     let tmp = init_tmp();
     create_task(&tmp, "Anything");
 
-    td().arg("compact")
+    td(&tmp)
+        .arg("compact")
         .current_dir(&tmp)
         .assert()
         .success()
-        .stderr(predicate::str::contains("done"));
+        .stderr(predicate::str::contains("writing compacted snapshot"));
 }

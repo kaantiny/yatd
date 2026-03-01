@@ -9,64 +9,41 @@ use crate::db;
 pub fn run(
     root: &Path,
     status: Option<&str>,
-    priority: Option<i32>,
-    effort: Option<i32>,
+    priority: Option<db::Priority>,
+    effort: Option<db::Effort>,
     label: Option<&str>,
     json: bool,
 ) -> Result<()> {
-    let conn = db::open(root)?;
-
-    let mut sql = String::from(
-        "SELECT id, title, description, type, priority, status, effort, parent, created, updated
-         FROM tasks WHERE 1=1",
-    );
-    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
-    let mut idx = 1;
+    let store = db::open(root)?;
+    let mut tasks = store.list_tasks()?;
 
     if let Some(s) = status {
-        sql.push_str(&format!(" AND status = ?{idx}"));
-        params.push(Box::new(s.to_string()));
-        idx += 1;
+        let parsed = db::parse_status(s)?;
+        tasks.retain(|t| t.status == parsed);
     }
     if let Some(p) = priority {
-        sql.push_str(&format!(" AND priority = ?{idx}"));
-        params.push(Box::new(p));
-        idx += 1;
+        tasks.retain(|t| t.priority == p);
     }
     if let Some(e) = effort {
-        sql.push_str(&format!(" AND effort = ?{idx}"));
-        params.push(Box::new(e));
-        idx += 1;
+        tasks.retain(|t| t.effort == e);
     }
     if let Some(l) = label {
-        sql.push_str(&format!(
-            " AND id IN (SELECT task_id FROM labels WHERE label = ?{idx})"
-        ));
-        params.push(Box::new(l.to_string()));
+        tasks.retain(|t| t.labels.iter().any(|x| x == l));
     }
 
-    sql.push_str(" ORDER BY priority, created");
-
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-    let mut stmt = conn.prepare(&sql)?;
-    let tasks: Vec<db::Task> = stmt
-        .query_map(param_refs.as_slice(), db::row_to_task)?
-        .collect::<rusqlite::Result<_>>()?;
+    tasks.sort_by_key(|t| (t.priority.score(), t.created_at.clone()));
 
     if json {
-        let details: Vec<db::TaskDetail> = tasks
-            .into_iter()
-            .map(|t| {
-                let labels = db::load_labels(&conn, &t.id)?;
-                let blockers = db::load_blockers(&conn, &t.id)?;
-                Ok(db::TaskDetail {
-                    task: t,
-                    labels,
-                    blockers,
-                })
-            })
-            .collect::<Result<_>>()?;
-        println!("{}", serde_json::to_string(&details)?);
+        // Keep list JSON lean: include scheduling fields but not full work-log history.
+        let mut value = serde_json::to_value(&tasks)?;
+        if let Some(items) = value.as_array_mut() {
+            for item in items {
+                if let Some(obj) = item.as_object_mut() {
+                    obj.remove("logs");
+                }
+            }
+        }
+        println!("{}", serde_json::to_string(&value)?);
     } else {
         let use_color = stdout_use_color();
         let mut table = Table::new();
@@ -75,7 +52,11 @@ pub fn run(
         for t in &tasks {
             table.add_row(vec![
                 cell_bold(&t.id, use_color),
-                cell_fg(format!("[{}]", t.status), Color::Yellow, use_color),
+                cell_fg(
+                    format!("[{}]", db::status_label(t.status)),
+                    Color::Yellow,
+                    use_color,
+                ),
                 cell_fg(db::priority_label(t.priority), Color::Red, use_color),
                 cell_fg(db::effort_label(t.effort), Color::Blue, use_color),
                 Cell::new(&t.title),
