@@ -56,6 +56,16 @@ Options:
 
 ## Contributions
 
+I'm trying [the Jujutsu VCS] out for this project. I'm enjoying it and LLMs
+seem to do pretty well with it too. The collaboration story is a bit less
+convenient, especially since I'm also trying [pr.pico.sh]. It works _very_ well
+with git projects, but jujutsu is missing some things git has which
+[pr.pico.sh] relies on. When cloning this repo, do so with `jj git clone
+--colocate git@git.secluded.site:yatd.git` and the relevant git commands should
+work fine.
+
+[the Jujutsu VCS]: https://www.jj-vcs.dev/latest/
+
 Patch requests are in [amolith/llm-projects] on [pr.pico.sh]. You don't need a
 new account to contribute, you don't need to fork this repo, you don't need to
 fiddle with `git send-email`, you don't need to faff with your email client to
@@ -71,13 +81,21 @@ If you're using LLM agents, you might instead want to give them [my pr.pico.sh
 skill].
 
 ```sh
-# Clone this repo, make your changes, and commit them
-# Create a new patch request with
+# Clone this repo
+jj git clone --colocate git@git.secluded.site:yatd.git
+
+# Create a new change and describe what it does
+jj new -m "Add fancy new thing" # Imperative, kernel-style commits, not Conventional Commits
+
+# When ready, create a new patch request
 git format-patch origin/main --stdout | ssh pr.pico.sh pr create amolith/llm-projects
-# After potential feedback, submit a revision to an existing patch request with
+
+# After potential feedback, revise and submit a new patchset
+jj amend
 git format-patch origin/main --stdout | ssh pr.pico.sh pr add {prID}
+
 # List patch requests
-ssh pr.pico.sh pr ls amolith/llm-projects
+ssh pr.pico.sh pr ls amolith/llm-projects --mine
 ```
 
 See "How do Patch Requests work?" on [pr.pico.sh]'s home page for a more
