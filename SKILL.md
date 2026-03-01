@@ -3,7 +3,7 @@ name: managing-tasks-with-td
 description: Manages tasks with the td CLI. Use when tracking work items, creating todos, managing task dependencies, or when the user mentions td, tasks, or todos in a project using td. When the project obviously uses something else, or the user doesn't mention td explicitly, do not read.
 ---
 
-Don't forget the single quotes around `'DESC'` HEREDOCs; they disable shell
+Don't forget the single quotes around `'EOF'` HEREDOCs; they disable shell
 interpolation, preventing it from messing up Markdown in the description.
 
 ## General reference
@@ -44,7 +44,7 @@ directly at task creation or by adding them later through logs.
 
 ```bash
 td create "Panic in token_refresh when OAuth provider returns HTTP 429" \
-  -p high -e medium -t bug -d "$(cat <<'DESC'
+  -p high -e medium -t bug -d "$(cat <<'EOF'
 Reproduction:
 1. Point OAuth at a rate-limiting provider (or stub with httpbin/status/429)
 2. Let the access token expire
@@ -57,11 +57,11 @@ auth::refresh_token() assumes every response is valid JSON. Matching on
 the status code before parsing would prevent this.
 
 Relevant: src/auth/refresh.rs:84 (the unwrap), src/auth/client.rs RetryPolicy
-DESC
+EOF
 )"
 
 td create "Add STARTTLS for outbound SMTP per RFC 3207" \
-  -e high -t feature -d "$(cat <<'DESC'
+  -e high -t feature -d "$(cat <<'EOF'
 smtp::send() opens a plaintext socket and never upgrades. Per RFC 3207,
 send EHLO, check for STARTTLS capability, then upgrade before AUTH.
 
@@ -70,17 +70,17 @@ upgrade should be straightforward.
 
 Relevant: src/smtp/transport.rs SmtpTransport::connect(),
           src/smtp/transport.rs:52 (socket open)
-DESC
+EOF
 )"
 
 td create "Flaky: test_concurrent_writes times out ~1/5 CI runs" \
-  -p low -e low -t bug -l ci,flaky -d "$(cat <<'DESC'
+  -p low -e low -t bug -l ci,flaky -d "$(cat <<'EOF'
 Passes locally, times out on CI. Likely a race on the shared tempdir —
 each spawn should use its own database file.
 
 CI: https://builds.example.org/job/1284
 Relevant: tests/db_stress.rs:88, db::open()
-DESC
+EOF
 )"
 
 td create "Child task" --parent td-a1b2c3 # for splitting tasks into smaller chunks
