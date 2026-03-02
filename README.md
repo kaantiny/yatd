@@ -75,7 +75,7 @@ Commands:
   ready     Show tasks with no open blockers
   next      Recommend next task(s) to work on
   stats     Show task statistics (always JSON)
-  compact   Vacuum the database
+  tidy      Compact accumulated delta files into the base snapshot
   export    Export tasks to JSONL (one JSON object per line)
   import    Import tasks from a JSONL file
   sync      Sync project state with a peer via magic wormhole

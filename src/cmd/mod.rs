@@ -1,4 +1,3 @@
-mod compact;
 mod create;
 mod dep;
 mod done;
@@ -18,6 +17,7 @@ mod show;
 mod skill;
 mod stats;
 pub mod sync;
+mod tidy;
 mod update;
 mod r#use;
 
@@ -159,9 +159,9 @@ pub fn dispatch(cli: &Cli) -> Result<()> {
             let root = require_root()?;
             stats::run(&root)
         }
-        Command::Compact => {
+        Command::Tidy => {
             let root = require_root()?;
-            compact::run(&root)
+            tidy::run(&root)
         }
         Command::Export => {
             let root = require_root()?;

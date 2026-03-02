@@ -330,26 +330,102 @@ impl Store {
     }
 
     /// Export all current state to a fresh base snapshot.
-    pub fn write_snapshot(&self) -> Result<PathBuf> {
-        let out = project_dir(&self.root, &self.project).join(BASE_FILE);
+    /// Compact accumulated deltas into the base snapshot using a two-phase
+    /// protocol that is safe against concurrent writers.
+    ///
+    /// **Phase 1** — rename `changes/` to `changes.compacting.<ulid>/`, then
+    /// immediately create a fresh `changes/`.  Any concurrent `td` command
+    /// that writes a delta after this point lands in the new `changes/` and is
+    /// therefore never touched by this operation.
+    ///
+    /// **Phase 2** — write a fresh base snapshot from the in-memory document
+    /// (which was loaded from both `base.loro` and every delta at `open` time),
+    /// then remove the compacting directory.
+    ///
+    /// Any orphaned `changes.compacting.*` directories left by a previously
+    /// crashed tidy are also removed: they were already merged into `self.doc`
+    /// at open time, so the new snapshot includes their contents.
+    ///
+    /// Returns the number of delta files folded into the snapshot.
+    pub fn tidy(&self) -> Result<usize> {
+        let project_dir = project_dir(&self.root, &self.project);
+        let changes_dir = project_dir.join(CHANGES_DIR);
+
+        // Phase 1: atomically hand off the current changes/ to a compacting
+        // directory so new writers have a clean home immediately.
+        let compacting_dir = project_dir.join(format!("changes.compacting.{}", Ulid::new()));
+        if changes_dir.exists() {
+            fs::rename(&changes_dir, &compacting_dir).with_context(|| {
+                format!(
+                    "failed to rename '{}' to '{}'",
+                    changes_dir.display(),
+                    compacting_dir.display()
+                )
+            })?;
+        }
+        fs::create_dir_all(&changes_dir).context("failed to create fresh changes/")?;
+
+        // Re-import every delta from the compacting directories.  self.doc
+        // was populated at open() time, but a concurrent writer may have
+        // appended a delta to changes/ between open() and the Phase 1
+        // rename — that delta is now inside compacting_dir without being in
+        // self.doc.  CRDT import is idempotent (deduplicates by OpID), so
+        // re-importing already-known ops is harmless.
+        let mut compacting_deltas = collect_delta_paths(&project_dir)?;
+        compacting_deltas.sort_by_key(|path| {
+            path.file_stem()
+                .and_then(|s| s.to_str())
+                .and_then(|s| Ulid::from_string(s).ok())
+        });
+        for delta_path in &compacting_deltas {
+            if let Ok(bytes) = fs::read(delta_path) {
+                if let Err(err) = self.doc.import(&bytes) {
+                    eprintln!(
+                        "warning: skipping unreadable delta '{}': {err}",
+                        delta_path.display()
+                    );
+                }
+            }
+        }
+
+        // Phase 2: write the new base snapshot.  self.doc now holds the
+        // full merged state including any concurrent deltas.
+        let out = project_dir.join(BASE_FILE);
         let bytes = self
             .doc
             .export(ExportMode::Snapshot)
             .context("failed to export loro snapshot")?;
         atomic_write_file(&out, &bytes)?;
-        Ok(out)
-    }
 
-    /// Delete persisted delta files after a fresh snapshot has been written.
-    pub fn purge_deltas(&self) -> Result<usize> {
-        let project_dir = project_dir(&self.root, &self.project);
-        let paths = collect_delta_paths(&project_dir)?;
+        // Remove the compacting directory we created in phase 1 plus any
+        // orphaned changes.compacting.* dirs from previously crashed tidies.
         let mut removed = 0usize;
-        for path in paths {
-            fs::remove_file(&path)
-                .with_context(|| format!("failed removing delta '{}'", path.display()))?;
-            removed += 1;
+        for entry in fs::read_dir(&project_dir)
+            .with_context(|| format!("failed to read project dir '{}'", project_dir.display()))?
+        {
+            let path = entry?.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if !name.starts_with("changes.compacting.") {
+                continue;
+            }
+            // Count files before removing for the summary report.
+            for file in fs::read_dir(&path)
+                .with_context(|| format!("failed to read '{}'", path.display()))?
+            {
+                let fp = file?.path();
+                if fp.is_file() {
+                    removed += 1;
+                }
+            }
+            fs::remove_dir_all(&path)
+                .with_context(|| format!("failed to remove compacting dir '{}'", path.display()))?;
         }
+
         Ok(removed)
     }
 

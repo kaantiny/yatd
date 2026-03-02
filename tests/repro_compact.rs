@@ -35,8 +35,8 @@ fn compact_cleans_delta_files() {
     let deltas = std::fs::read_dir(&changes_dir).unwrap().count();
     assert!(deltas > 0, "Deltas should exist before compaction");
 
-    // Compact
-    td(&tmp).arg("compact").current_dir(&tmp).assert().success();
+    // Tidy (formerly compact)
+    td(&tmp).arg("tidy").current_dir(&tmp).assert().success();
 
     // Deltas are folded into the snapshot and removed.
     let deltas_after = std::fs::read_dir(&changes_dir).unwrap().count();

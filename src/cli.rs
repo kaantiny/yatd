@@ -192,8 +192,8 @@ pub enum Command {
     /// Show task statistics (always JSON)
     Stats,
 
-    /// Vacuum the database
-    Compact,
+    /// Compact accumulated delta files into the base snapshot
+    Tidy,
 
     /// Export tasks to JSONL (one JSON object per line)
     Export,

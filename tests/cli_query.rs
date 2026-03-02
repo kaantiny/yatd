@@ -153,10 +153,10 @@ fn stats_counts_tasks() {
     assert_eq!(v["closed"].as_i64().unwrap(), 1);
 }
 
-// ── compact ──────────────────────────────────────────────────────────
+// ── tidy ─────────────────────────────────────────────────────────────
 
 #[test]
-fn compact_succeeds() {
+fn tidy_succeeds() {
     let tmp = init_tmp();
     create_task(&tmp, "Anything");
     create_task(&tmp, "Anything else");
@@ -171,11 +171,11 @@ fn compact_succeeds() {
     assert!(count_before > 0);
 
     td(&tmp)
-        .arg("compact")
+        .arg("tidy")
         .current_dir(&tmp)
         .assert()
         .success()
-        .stderr(predicate::str::contains("writing compacted snapshot"))
+        .stderr(predicate::str::contains("compacting deltas"))
         .stderr(predicate::str::contains("removed"));
 
     let count_after = std::fs::read_dir(&changes)
