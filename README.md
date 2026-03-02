@@ -91,8 +91,9 @@ Options:
 
 ## Syncing
 
-Everything is [CRDTs], so syncing (should be) easy! The built-in method
-uses a [Rust port][magic-wormhole.rs] of [magic-wormhole]. 
+Everything is [CRDTs], so syncing is (or at least should™ be) easy! The
+built-in method uses a [Rust port][magic-wormhole.rs] of
+[magic-wormhole]. 
 
 - Initiate a sync on one device with `td sync`
   - Outputs a code like `9-lurid-gecko`
@@ -110,8 +111,8 @@ or whatever, you _should_ just be able to point the sync daemon at
 
 When syncing a project to another machine, do **not** run `td init` on
 the other machine. Initialize just once on the first machine, then
-bootstrap others with [`td sync`](#syncing). The first machine will
-notice the other has nothing and provide everything.
+bootstrap others with `td sync` ([sync docs](#syncing)). The first
+machine will notice the other has nothing and provide everything.
 
 Running `td init` on both machines generates different `project_id`
 values and prevents sync from merging them.
