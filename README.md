@@ -7,35 +7,17 @@ complementary to tools like [OpenSpec].
 
 [OpenSpec]: https://github.com/Fission-AI/OpenSpec
 
-Install with `mise use -g cargo:https://git.secluded.site/yatd@latest` or
-`cargo install --git https://git.secluded.site/yatd` or by cloning and running
-`make install`. Tell your agent how/when to use td by first installing the
-skill with `td skill`, then somehow referring to td when telling the agent to
-do something involving td. It shouldn't invoke the skill unless you mention td,
-allowing your agent to use other todo/issue tools in other repos even with this
-global skill.
+Install with `mise use -g cargo:https://git.secluded.site/yatd@latest`
+or `cargo install --git https://git.secluded.site/yatd` or by cloning
+and running `make install`. Tell your agent how/when to use td by first
+installing the skill with `td skill`, then somehow referring to td when
+telling the agent to do something involving td. It shouldn't invoke the
+skill unless you mention td, allowing your agent to use other todo/issue
+tools in other repos even with this global skill.
 
 Inspired by [alosec/td].
 
 [alosec/td]: https://github.com/alosec/td/
-
-## Bootstrapping
-
-When syncing a project to another machine, do **not** run `td init` on
-the other machine. Initialize just once on the first machine, then
-bootstrap others by running `td sync` on the first machine, then `td
-sync wormhole-code` on another.
-
-```sh
-# Machine A (already initialized)
-td sync
-
-# Machine B (same repo checkout, no td project yet)
-td sync 5-lurid-gecko
-```
-
-Running `td init` on both machines creates different `project_id` values and
-prevents sync from merging them.
 
 ## Usage
 
@@ -107,22 +89,49 @@ Options:
   -V, --version            Print version
 ```
 
+## Syncing
+
+Everything is [CRDTs], so syncing (should be) easy! The built-in method
+uses a [Rust port][magic-wormhole.rs] of [magic-wormhole]. 
+
+- Initiate a sync on one device with `td sync`
+  - Outputs a code like `9-lurid-gecko`
+- Accept on another device with `td sync 9-lurid-gecko`
+
+[CRDTs]: https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type
+[magic-wormhole.rs]: https://github.com/magic-wormhole/magic-wormhole.rs
+[magic-wormhole]: https://magic-wormhole.readthedocs.io/en/latest/welcome.html
+
+If you want to use something like Syncthing or Nextcloud or Google Drive
+or whatever, you _should_ just be able to point the sync daemon at
+`$XDG_DATA_HOME/td/projects/`, but I've not tested this.
+
+## Bootstrapping
+
+When syncing a project to another machine, do **not** run `td init` on
+the other machine. Initialize just once on the first machine, then
+bootstrap others with [`td sync`](#syncing). The first machine will
+notice the other has nothing and provide everything.
+
+Running `td init` on both machines generates different `project_id`
+values and prevents sync from merging them.
+
 ## Contributions
 
-I'm trying [the Jujutsu VCS] out for this project. I'm enjoying it and LLMs
-seem to do pretty well with it too. The collaboration story is a bit less
-convenient, especially since I'm also trying [pr.pico.sh]. It works _very_ well
-with git projects, but jujutsu is missing some things git has which
-[pr.pico.sh] relies on. When cloning this repo, do so with `jj git clone
---colocate git@git.secluded.site:yatd.git` and the relevant git commands should
-work fine.
+I'm trying [the Jujutsu VCS] out for this project. I'm enjoying it and
+LLMs seem to do pretty well with it too. The collaboration story is a
+bit less convenient, especially since I'm also trying [pr.pico.sh]. It
+works _very_ well with git projects, but jujutsu is missing some things
+git has which [pr.pico.sh] relies on. When cloning this repo, do so with
+`jj git clone --colocate git@git.secluded.site:yatd.git` and the
+relevant git commands should work fine.
 
 [the Jujutsu VCS]: https://www.jj-vcs.dev/latest/
 
-Patch requests are in [amolith/llm-projects] on [pr.pico.sh]. You don't need a
-new account to contribute, you don't need to fork this repo, you don't need to
-fiddle with `git send-email`, you don't need to faff with your email client to
-get `git request-pull` working...
+Patch requests are in [amolith/llm-projects] on [pr.pico.sh]. You don't
+need a new account to contribute, you don't need to fork this repo, you
+don't need to fiddle with `git send-email`, you don't need to faff with
+your email client to get `git request-pull` working...
 
 You just need:
 
