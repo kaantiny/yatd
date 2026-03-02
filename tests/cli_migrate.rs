@@ -13,7 +13,7 @@ fn init_sets_loro_schema_version_in_meta() {
     let tmp = TempDir::new().unwrap();
 
     td(&tmp)
-        .args(["init", "demo"])
+        .args(["project", "init", "demo"])
         .current_dir(&tmp)
         .assert()
         .success();
@@ -28,7 +28,7 @@ fn corrupted_delta_file_is_tolerated_on_open() {
     let tmp = TempDir::new().unwrap();
 
     td(&tmp)
-        .args(["init", "demo"])
+        .args(["project", "init", "demo"])
         .current_dir(&tmp)
         .assert()
         .success();
@@ -63,7 +63,7 @@ fn project_env_overrides_directory_binding() {
     std::fs::create_dir_all(&beta_dir).unwrap();
 
     td(&tmp)
-        .args(["init", "alpha"])
+        .args(["project", "init", "alpha"])
         .current_dir(&alpha_dir)
         .assert()
         .success();
@@ -74,7 +74,7 @@ fn project_env_overrides_directory_binding() {
         .success();
 
     td(&tmp)
-        .args(["init", "beta"])
+        .args(["project", "init", "beta"])
         .current_dir(&beta_dir)
         .assert()
         .success();
@@ -108,7 +108,7 @@ fn legacy_local_sqlite_artifacts_do_not_affect_commands() {
     let tmp = TempDir::new().unwrap();
 
     td(&tmp)
-        .args(["init", "demo"])
+        .args(["project", "init", "demo"])
         .current_dir(&tmp)
         .assert()
         .success();

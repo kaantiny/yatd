@@ -11,7 +11,7 @@ fn td(home: &TempDir) -> Command {
 fn init_tmp() -> TempDir {
     let tmp = TempDir::new().unwrap();
     td(&tmp)
-        .args(["init", "main"])
+        .args(["project", "init", "main"])
         .current_dir(&tmp)
         .assert()
         .success();
@@ -174,7 +174,7 @@ fn export_import_round_trips_logs() {
 
     let tmp2 = TempDir::new().unwrap();
     td(&tmp2)
-        .args(["init", "mirror"])
+        .args(["project", "init", "mirror"])
         .current_dir(&tmp2)
         .assert()
         .success();

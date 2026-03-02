@@ -11,7 +11,7 @@ fn td(home: &TempDir) -> Command {
 fn init_tmp() -> TempDir {
     let tmp = TempDir::new().unwrap();
     td(&tmp)
-        .args(["init", "main"])
+        .args(["project", "init", "main"])
         .current_dir(&tmp)
         .assert()
         .success();

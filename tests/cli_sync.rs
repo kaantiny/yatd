@@ -18,7 +18,7 @@ fn sync_invalid_code_format_fails() {
 
     Command::cargo_bin("td")
         .unwrap()
-        .args(["init", "synctest"])
+        .args(["project", "init", "synctest"])
         .current_dir(cwd.path())
         .env("HOME", home.path())
         .assert()
