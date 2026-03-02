@@ -13,29 +13,29 @@ Install with `mise use -g cargo:https://git.secluded.site/yatd@latest` or
 skill with `td skill`, then somehow referring to td when telling the agent to
 do something involving td. It shouldn't invoke the skill unless you mention td,
 allowing your agent to use other todo/issue tools in other repos even with this
-global skill. Td IDs are prefixed with `td-`, so pasting the ID should be
-enough of a mention.
-
-## Sync Bootstrapping
-
-When bringing a project to a second machine, do **not** run `td init` again.
-Initialize once on the first machine, then bootstrap the second machine by
-running `td sync` and entering the wormhole code from the first machine.
-
-```sh
-# Machine A (already initialized project)
-td sync
-
-# Machine B (same repo checkout, no td project yet)
-td sync <code-from-machine-a>
-```
-
-Running `td init` on both machines creates different `project_id` values and
-prevents sync from merging them.
+global skill.
 
 Inspired by [alosec/td].
 
 [alosec/td]: https://github.com/alosec/td/
+
+## Sync Bootstrapping
+
+When syncing a project to another machine, do **not** run `td init` on
+the other machine.  Initialize just once on the first machine, then
+bootstrap others by running `td sync` on the first machine, then `td
+sync wormhole-code` on another.
+
+```sh
+# Machine A (already initialized)
+td sync
+
+# Machine B (same repo checkout, no td project yet)
+td sync 5-lurid-gecko
+```
+
+Running `td init` on both machines creates different `project_id` values and
+prevents sync from merging them.
 
 ```
 $ td --help
@@ -44,31 +44,35 @@ Todo tracker for AI agents
 Usage: td [OPTIONS] <COMMAND>
 
 Commands:
-  init     Initialize .td directory
-  create   Create a new task [aliases: add]
-  list     List tasks [aliases: ls]
-  show     Show task details
-  log      Append a work log entry to a task
-  update   Update a task
-  done     Mark task(s) as closed [aliases: close]
-  rm       Delete task(s)
-  reopen   Reopen task(s)
-  dep      Manage dependencies / blockers
-  label    Manage labels
-  search   Search tasks by title or description
-  ready    Show tasks with no open blockers
-  next     Recommend next task(s) to work on
-  stats    Show task statistics (always JSON)
-  compact  Vacuum the database
-  export   Export tasks to JSONL (one JSON object per line)
-  import   Import tasks from a JSONL file
-  skill    Install the agent skill file (SKILL.md)
-  help     Print this message or the help of the given subcommand(s)
+  init      Initialize a central project and bind the current directory to it
+  use       Bind the current directory to an existing project
+  projects  List all known projects in central storage
+  create    Create a new task [aliases: add]
+  list      List tasks [aliases: ls]
+  show      Show task details
+  log       Append a work log entry to a task
+  update    Update a task
+  done      Mark task(s) as closed [aliases: close]
+  rm        Delete task(s)
+  reopen    Reopen task(s)
+  dep       Manage dependencies / blockers
+  label     Manage labels
+  search    Search tasks by title or description
+  ready     Show tasks with no open blockers
+  next      Recommend next task(s) to work on
+  stats     Show task statistics (always JSON)
+  compact   Vacuum the database
+  export    Export tasks to JSONL (one JSON object per line)
+  import    Import tasks from a JSONL file
+  sync      Sync project state with a peer via magic wormhole
+  skill     Install the agent skill file (SKILL.md)
+  help      Print this message or the help of the given subcommand(s)
 
 Options:
-  -j, --json     Output JSON
-  -h, --help     Print help
-  -V, --version  Print version
+  -j, --json               Output JSON
+      --project <PROJECT>  Select a project explicitly (overrides cwd binding)
+  -h, --help               Print help
+  -V, --version            Print version
 ```
 
 ## Contributions
