@@ -2,7 +2,7 @@
 
 ## What this repo is
 - Rust CLI app (`td`) for local task tracking aimed at agent workflows.
-- Storage is SQLite in a per-project `.td/tasks.db` database.
+- Storage is Loro CRDT in central storage (`~/.local/share/td/projects/<name>/`). Directory bindings map working directories to projects.
 - Entry flow is `src/main.rs` → `yatd::run()` (`src/lib.rs`) → `cmd::dispatch()` (`src/cmd/mod.rs`).
 - We use jj for version control, not git. DO NOT use Conventional Commits. Do use imperative, Linux kernel-style commits. Always check `jj st` before starting. If there are changes in progress, run `jj new -m ...` to create a new working copy describing the pending work. If there are no changes in the working copy, run `jj desc -m ...` to describe the pending work. `jj diff --git` is more understandable.
 - JSON mode is not for "agent consumers". It's for wiring things together, whether the wirer is human or LLM.
@@ -14,7 +14,7 @@
 - Verify after changes: `make verify` (formats, typechecks, lints, and tests in one pass)
 
 ## Implementation details
-- Initialization requirement: most commands call `require_root()` and fail unless `.td/` exists somewhere in current dir ancestry (`db::find_root`). Only `project` and `skill` avoid this path.
+- Project resolution: most commands resolve the project via `db::resolve_project_name()` which checks `--project` flag, `TD_PROJECT` env var, or the directory binding in `~/.local/share/td/bindings.json`. Without a resolved project, commands fail with "no project selected". Only `project` and `skill` subcommands avoid this check.
 - DB schema is created in `src/db.rs` (`SCHEMA`):
 - Foreign keys are explicitly enabled on each connection (`PRAGMA foreign_keys = ON`).
 - Task IDs:
@@ -36,7 +36,7 @@
   1. create temp dir
   2. run `td project init`
   3. invoke command under test
-  4. assert output and/or inspect `.td/tasks.db` directly with `rusqlite`
+  4. assert output and/or inspect central storage in `~/.local/share/td/projects/<name>/` directly
 - When adding/changing behavior, prefer extending these CLI tests rather than only unit tests.
 
 ## Conventions and patterns to preserve
@@ -45,7 +45,7 @@
 - JSON structs rely on serde naming alignment (notably `Task.task_type` renamed to `"type"`). Maintain compatibility for import/export and tests.
 
 ## Gotchas
-- Running most commands outside an initialized tree yields `not initialized. Run 'td project init'` due to upward root search; tests should set `current_dir` to initialized temp dirs.
+- Running commands without a project binding (and without `--project` or `TD_PROJECT`) yields `no project selected`. Tests should set `current_dir` to directories with initialized bindings.
 - `Cargo.toml` uses `rusqlite` with `bundled` feature, so SQLite is vendored; build behavior differs from system-SQLite setups.
 
 ## Contributions
