@@ -143,7 +143,17 @@ impl TaskId {
     }
 
     pub fn short(&self) -> String {
-        self.0[self.0.len() - 7..].to_string()
+        format!("td-{}", &self.0[self.0.len() - 7..])
+    }
+
+    /// Return a display-friendly short ID from a raw ULID string.
+    pub fn display_id(raw: &str) -> String {
+        let n = raw.len();
+        if n > 7 {
+            format!("td-{}", &raw[n - 7..])
+        } else {
+            format!("td-{raw}")
+        }
     }
 }
 
@@ -539,6 +549,8 @@ pub fn list_projects() -> Result<Vec<String>> {
 }
 
 pub fn resolve_task_id(store: &Store, raw: &str, include_deleted: bool) -> Result<TaskId> {
+    let raw = raw.strip_prefix("td-").unwrap_or(raw);
+
     if let Ok(id) = TaskId::parse(raw) {
         if store.get_task(&id, include_deleted)?.is_some() {
             return Ok(id);

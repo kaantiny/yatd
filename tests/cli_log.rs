@@ -39,7 +39,7 @@ fn log_human_reports_task_id() {
         .assert()
         .success()
         .stdout(predicate::str::contains(format!(
-            "logged to {}",
+            "logged to td-{}",
             &id[id.len() - 7..]
         )));
 }
@@ -70,7 +70,7 @@ fn log_nonexistent_task_fails() {
         .current_dir(&tmp)
         .assert()
         .failure()
-        .stderr(predicate::str::contains("task 'td-nope' not found"));
+        .stderr(predicate::str::contains("task 'nope' not found"));
 }
 
 #[test]

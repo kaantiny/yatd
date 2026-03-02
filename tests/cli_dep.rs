@@ -221,7 +221,7 @@ fn dep_add_rejects_nonexistent_child() {
         .current_dir(&tmp)
         .assert()
         .failure()
-        .stderr(predicate::str::contains("task 'td-ghost' not found"));
+        .stderr(predicate::str::contains("task 'ghost' not found"));
 }
 
 #[test]
@@ -234,5 +234,5 @@ fn dep_add_rejects_nonexistent_parent() {
         .current_dir(&tmp)
         .assert()
         .failure()
-        .stderr(predicate::str::contains("task 'td-phantom' not found"));
+        .stderr(predicate::str::contains("task 'phantom' not found"));
 }
