@@ -38,7 +38,10 @@ fn log_human_reports_task_id() {
         .current_dir(&tmp)
         .assert()
         .success()
-        .stdout(predicate::str::contains(format!("logged to {}", &id[..7])));
+        .stdout(predicate::str::contains(format!(
+            "logged to {}",
+            &id[id.len() - 7..]
+        )));
 }
 
 #[test]

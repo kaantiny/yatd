@@ -103,9 +103,13 @@ fn dep_tree_shows_children() {
         .current_dir(&tmp)
         .assert()
         .success()
-        .stdout(predicate::str::contains(&parent[..7]))
-        .stdout(predicate::str::contains(&subtask_one_id[..7]))
-        .stdout(predicate::str::contains(&subtask_two_id[..7]));
+        .stdout(predicate::str::contains(&parent[parent.len() - 7..]))
+        .stdout(predicate::str::contains(
+            &subtask_one_id[subtask_one_id.len() - 7..],
+        ))
+        .stdout(predicate::str::contains(
+            &subtask_two_id[subtask_two_id.len() - 7..],
+        ));
 }
 
 #[test]

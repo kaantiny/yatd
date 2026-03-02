@@ -168,7 +168,7 @@ fn show_displays_task() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Details here"))
-        .stdout(predicate::str::contains(&id[..7]));
+        .stdout(predicate::str::contains(&id[id.len() - 7..]));
 }
 
 #[test]
@@ -248,10 +248,12 @@ fn show_annotates_closed_blockers() {
         .assert()
         .success()
         .stdout(predicate::str::contains("blockers"))
-        .stdout(predicate::str::contains(&open_blocker[..7]))
+        .stdout(predicate::str::contains(
+            &open_blocker[open_blocker.len() - 7..],
+        ))
         .stdout(predicate::str::contains(&format!(
             "{} [closed]",
-            &closed_blocker[..7]
+            &closed_blocker[closed_blocker.len() - 7..]
         )));
 }
 
@@ -280,7 +282,7 @@ fn show_all_closed_blockers_prefixed() {
         .success()
         .stdout(predicate::str::contains("blocker"))
         .stdout(predicate::str::contains("[all closed]"))
-        .stdout(predicate::str::contains(&blocker[..7]));
+        .stdout(predicate::str::contains(&blocker[blocker.len() - 7..]));
 }
 
 #[test]
@@ -304,7 +306,7 @@ fn show_single_open_blocker_singular_label() {
 
     // Singular "blocker", no "blockers".
     assert!(stdout.contains("blocker"));
-    assert!(stdout.contains(&blocker[..7]));
+    assert!(stdout.contains(&blocker[blocker.len() - 7..]));
     // Should not contain [closed] or [all closed].
     assert!(!stdout.contains("[closed]"));
 }

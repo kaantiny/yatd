@@ -143,7 +143,7 @@ impl TaskId {
     }
 
     pub fn short(&self) -> String {
-        self.0.chars().take(7).collect()
+        self.0[self.0.len() - 7..].to_string()
     }
 }
 
@@ -491,9 +491,10 @@ pub fn resolve_task_id(store: &Store, raw: &str, include_deleted: bool) -> Resul
         store.list_tasks()?
     };
 
+    let upper = raw.to_ascii_uppercase();
     let matches: Vec<TaskId> = tasks
         .into_iter()
-        .filter(|t| t.id.as_str().starts_with(raw))
+        .filter(|t| t.id.as_str().ends_with(&upper))
         .map(|t| t.id)
         .collect();
 
