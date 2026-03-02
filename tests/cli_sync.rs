@@ -271,3 +271,187 @@ fn bootstrap_from_peer_rejects_missing_project_id() {
         "bootstrap should not persist snapshot for invalid peer doc"
     );
 }
+
+/// Helper: insert a minimal valid task into a doc via apply_and_persist.
+fn insert_task(store: &yatd::db::Store, title: &str) {
+    let id = yatd::db::gen_id();
+    store
+        .apply_and_persist(|doc| {
+            let tasks = doc.get_map("tasks");
+            let task = yatd::db::insert_task_map(&tasks, &id)?;
+            task.insert("title", title)?;
+            task.insert("description", "")?;
+            task.insert("type", "task")?;
+            task.insert("priority", "medium")?;
+            task.insert("status", "open")?;
+            task.insert("effort", "medium")?;
+            task.insert("parent", "")?;
+            task.insert("created_at", yatd::db::now_utc())?;
+            task.insert("updated_at", yatd::db::now_utc())?;
+            task.insert("deleted_at", "")?;
+            task.insert_container("labels", loro::LoroMap::new())?;
+            task.insert_container("blockers", loro::LoroMap::new())?;
+            task.insert_container("logs", loro::LoroMap::new())?;
+            Ok(())
+        })
+        .unwrap();
+}
+
+/// Both peers have the same project (same project_id) with no directory
+/// binding/selection.  SyncAll should discover the shared project and converge
+/// both stores to the same state.
+#[test]
+fn sync_all_exchanges_shared_projects() {
+    use std::fs;
+    use yatd::cmd::sync::{build_local_manifest, sync_all_exchange, wormhole_config};
+    use yatd::db;
+
+    let home_a = tempfile::tempdir().unwrap();
+    let home_b = tempfile::tempdir().unwrap();
+    let cwd_a = tempfile::tempdir().unwrap();
+    let cwd_b = tempfile::tempdir().unwrap();
+
+    let data_root_a = home_a.path().join(".local/share/td");
+    let data_root_b = home_b.path().join(".local/share/td");
+    fs::create_dir_all(data_root_a.join("projects")).unwrap();
+    fs::create_dir_all(data_root_b.join("projects")).unwrap();
+
+    // Peer A: init "shared" and add a task.
+    let store_a = db::Store::init(&data_root_a, "shared").unwrap();
+    insert_task(&store_a, "task from A");
+
+    // Peer B: bootstrap from A's base snapshot (same project_id), add its own task.
+    let proj_b = data_root_b.join("projects/shared");
+    fs::create_dir_all(proj_b.join("changes")).unwrap();
+    fs::copy(
+        data_root_a.join("projects/shared/base.loro"),
+        proj_b.join("base.loro"),
+    )
+    .unwrap();
+    let store_b = db::Store::open(&data_root_b, "shared").unwrap();
+    insert_task(&store_b, "task from B");
+
+    // Build manifests from disk (HOME-free: uses explicit data_root).
+    let manifest_a = build_local_manifest(&data_root_a).unwrap();
+    let manifest_b = build_local_manifest(&data_root_b).unwrap();
+    assert_eq!(manifest_a.len(), 1);
+    assert_eq!(manifest_b.len(), 1);
+    assert_eq!(
+        manifest_a[0].project_id, manifest_b[0].project_id,
+        "both sides must share the same project_id"
+    );
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (results_a, results_b) = rt.block_on(async {
+        use magic_wormhole::{MailboxConnection, Wormhole};
+
+        let mailbox_a = MailboxConnection::create(wormhole_config(), 2)
+            .await
+            .unwrap();
+        let code = mailbox_a.code().clone();
+        let mailbox_b = MailboxConnection::connect(wormhole_config(), code, false)
+            .await
+            .unwrap();
+        let (wormhole_a, wormhole_b) =
+            tokio::try_join!(Wormhole::connect(mailbox_a), Wormhole::connect(mailbox_b)).unwrap();
+
+        tokio::try_join!(
+            sync_all_exchange(cwd_a.path(), &data_root_a, manifest_a, wormhole_a),
+            sync_all_exchange(cwd_b.path(), &data_root_b, manifest_b, wormhole_b),
+        )
+        .unwrap()
+    });
+
+    assert_eq!(
+        results_a.len(),
+        1,
+        "A should have synced exactly one project"
+    );
+    assert_eq!(
+        results_b.len(),
+        1,
+        "B should have synced exactly one project"
+    );
+
+    let (store_a_synced, report_a) = &results_a[0];
+    let (store_b_synced, report_b) = &results_b[0];
+
+    // Both peers should have imported: A has "task A", B starts from A's empty
+    // base then adds "task B". After sync, both have distinct changes to exchange.
+    assert!(report_a.imported, "A should have imported B's task");
+    assert!(report_b.imported, "B should have imported A's task");
+
+    let a_tasks = store_a_synced.list_tasks().unwrap();
+    let b_tasks = store_b_synced.list_tasks().unwrap();
+    assert_eq!(a_tasks.len(), 2, "A should have 2 tasks after SyncAll");
+    assert_eq!(b_tasks.len(), 2, "B should have 2 tasks after SyncAll");
+
+    let a_titles: Vec<&str> = a_tasks.iter().map(|t| t.title.as_str()).collect();
+    let b_titles: Vec<&str> = b_tasks.iter().map(|t| t.title.as_str()).collect();
+    assert!(a_titles.contains(&"task from A"));
+    assert!(a_titles.contains(&"task from B"));
+    assert!(b_titles.contains(&"task from A"));
+    assert!(b_titles.contains(&"task from B"));
+}
+
+/// Both peers have projects but no project_ids in common.  SyncAll should
+/// complete without error and return an empty result on both sides.
+#[test]
+fn sync_all_no_intersection_is_noop() {
+    use std::fs;
+    use yatd::cmd::sync::{build_local_manifest, sync_all_exchange, wormhole_config};
+    use yatd::db;
+
+    let home_a = tempfile::tempdir().unwrap();
+    let home_b = tempfile::tempdir().unwrap();
+    let cwd_a = tempfile::tempdir().unwrap();
+    let cwd_b = tempfile::tempdir().unwrap();
+
+    let data_root_a = home_a.path().join(".local/share/td");
+    let data_root_b = home_b.path().join(".local/share/td");
+    fs::create_dir_all(data_root_a.join("projects")).unwrap();
+    fs::create_dir_all(data_root_b.join("projects")).unwrap();
+
+    // A has "alpha", B has "bravo" — independently initialised, different project_ids.
+    let _ = db::Store::init(&data_root_a, "alpha").unwrap();
+    let _ = db::Store::init(&data_root_b, "bravo").unwrap();
+
+    let manifest_a = build_local_manifest(&data_root_a).unwrap();
+    let manifest_b = build_local_manifest(&data_root_b).unwrap();
+    assert_eq!(manifest_a.len(), 1);
+    assert_eq!(manifest_b.len(), 1);
+    assert_ne!(
+        manifest_a[0].project_id, manifest_b[0].project_id,
+        "projects must have different ids"
+    );
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (results_a, results_b) = rt.block_on(async {
+        use magic_wormhole::{MailboxConnection, Wormhole};
+
+        let mailbox_a = MailboxConnection::create(wormhole_config(), 2)
+            .await
+            .unwrap();
+        let code = mailbox_a.code().clone();
+        let mailbox_b = MailboxConnection::connect(wormhole_config(), code, false)
+            .await
+            .unwrap();
+        let (wormhole_a, wormhole_b) =
+            tokio::try_join!(Wormhole::connect(mailbox_a), Wormhole::connect(mailbox_b)).unwrap();
+
+        tokio::try_join!(
+            sync_all_exchange(cwd_a.path(), &data_root_a, manifest_a, wormhole_a),
+            sync_all_exchange(cwd_b.path(), &data_root_b, manifest_b, wormhole_b),
+        )
+        .unwrap()
+    });
+
+    assert!(
+        results_a.is_empty(),
+        "A: no shared projects, result should be empty"
+    );
+    assert!(
+        results_b.is_empty(),
+        "B: no shared projects, result should be empty"
+    );
+}

@@ -7,11 +7,13 @@ use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+
+use fs2::FileExt;
 use ulid::Ulid;
 
 pub const PROJECT_ENV: &str = "TD_PROJECT";
 
-const PROJECTS_DIR: &str = "projects";
+pub(crate) const PROJECTS_DIR: &str = "projects";
 const CHANGES_DIR: &str = "changes";
 const BINDINGS_FILE: &str = "bindings.json";
 const BASE_FILE: &str = "base.loro";
@@ -520,6 +522,11 @@ impl Store {
         Ok(tasks)
     }
 
+    /// Return the stable project identity stored in `meta.project_id`.
+    pub fn project_id(&self) -> Result<String> {
+        read_project_id_from_doc(&self.doc)
+    }
+
     pub fn schema_version(&self) -> Result<u32> {
         migrate::read_schema_version(&self.doc)
     }
@@ -609,8 +616,67 @@ pub fn bootstrap_sync(cwd: &Path, project: &str, delta: &[u8]) -> Result<Store> 
     Ok(store)
 }
 
+/// Bootstrap a project from a peer delta using an explicit data root.
+///
+/// Unlike [`bootstrap_sync`], this function does not consult `HOME` and is
+/// therefore safe to call from async contexts where `HOME` may vary by peer.
+///
+/// If `bind_cwd` is true, the given working directory is bound to the new
+/// project. Pass false when bootstrapping from a SyncAll context to avoid
+/// unexpectedly binding directories like the user's home.
+///
+/// Uses exclusive file locking to prevent race conditions when multiple
+/// concurrent sync operations create projects or modify bindings.
+pub fn bootstrap_sync_at(
+    data_root: &Path,
+    cwd: &Path,
+    project: &str,
+    delta: &[u8],
+    bind_cwd: bool,
+) -> Result<Store> {
+    fs::create_dir_all(data_root.join(PROJECTS_DIR))?;
+    validate_project_name(project)?;
+
+    // Exclusive lock prevents races when concurrent syncs create the same project
+    // or modify bindings simultaneously.
+    let lock_path = data_root.join(".bindings.lock");
+    let lock_file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)
+        .with_context(|| format!("failed to open lock file '{}'", lock_path.display()))?;
+    lock_file
+        .lock_exclusive()
+        .context("failed to acquire exclusive lock on bindings")?;
+
+    // Now holding the lock: create project and optionally update bindings atomically.
+    let store = Store::bootstrap_from_peer(data_root, project, delta)?;
+
+    if bind_cwd {
+        let canonical = fs::canonicalize(cwd)
+            .with_context(|| format!("failed to canonicalize '{}'", cwd.display()))?;
+        let mut bindings = load_bindings(data_root)?;
+        bindings
+            .bindings
+            .insert(canonical.to_string_lossy().to_string(), project.to_string());
+        save_bindings(data_root, &bindings)?;
+    }
+
+    // Lock is released when lock_file is dropped.
+    Ok(store)
+}
+
 pub fn list_projects() -> Result<Vec<String>> {
     let root = data_root()?;
+    list_projects_in(&root)
+}
+
+/// List project names rooted at an explicit data directory.
+///
+/// Unlike [`list_projects`], this does not consult `HOME` and is therefore
+/// safe to call from async contexts where `HOME` may vary between peers.
+pub(crate) fn list_projects_in(root: &Path) -> Result<Vec<String>> {
     let mut out = Vec::new();
     let dir = root.join(PROJECTS_DIR);
     if !dir.exists() {
@@ -818,7 +884,7 @@ fn is_prefix_path(prefix: &Path, target: &Path) -> bool {
     }
 }
 
-fn validate_project_name(name: &str) -> Result<()> {
+pub fn validate_project_name(name: &str) -> Result<()> {
     if name.is_empty() {
         bail!("project name cannot be empty");
     }
