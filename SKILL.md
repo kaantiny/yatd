@@ -6,28 +6,52 @@ description: Manages tasks with the td CLI. Use when tracking work items, creati
 Don't forget the single quotes around `'EOF'` HEREDOCs; they disable shell
 interpolation, preventing it from messing up Markdown in the description.
 
+## Projects and initialisation
+
+Storage is central (`~/.local/share/td/`), not per-directory. Each project
+is a named Loro CRDT document. Directories are bound to projects via
+`td init` or `td use`; the binding is resolved by longest-prefix match on
+the canonical path. You can also override with `--project <name>` or the
+`TD_PROJECT` env var.
+
+```bash
+td init myproject           # create project + bind cwd to it
+td use myproject            # bind cwd to an existing project
+td projects                 # list all known projects
+td --project other list     # one-off override
+TD_PROJECT=other td list    # env override
+```
+
 ## General reference
 
 These are not your most-used commands, nor are they the most critical, but you
 still need reference for them. The sections following are more important than
 this one and thus contain more instruction.
 
+Task IDs are 26-character ULIDs. Most commands accept a unique prefix as
+shorthand (e.g. the first 7 characters shown in table output). If the prefix
+is ambiguous, td will tell you.
+
+Deletion is a soft delete (sets `deleted_at` and marks the task closed).
+Deleted tasks are hidden from `list`/`ready`/`next` but still visible to
+`show` and included in `export`.
+
 ```bash
-td rm td-a1b2c3 td-d4e5f6 # delete one or many IDs
-td rm --recursive td-parent # required for deleting task trees
-td rm --force td-blocker # suppress dependent-unblocked warnings
-td list # all
+td rm <id> [<id>...]        # soft-delete one or many
+td rm --recursive <parent>  # required for deleting task trees
+td rm --force <blocker>     # suppress dependent-unblocked warnings
+td list                     # all non-deleted tasks
 td list -s open
 td list -p high
 td list -e low
 td list -l frontend
-td label add td-a1b2c3 frontend
-td label rm td-a1b2c3 backend
-td label list td-a1b2c3
+td label add <id> frontend
+td label rm <id> backend
+td label list <id>
 td label list-all
-td show td-a1b2c3 # read a task, its metadata, and logs
-td ready # show open tasks with no active blockers
-td search "smtp" # substring match in title and description
+td show <id>                # read a task, its metadata, and logs
+td ready                    # show open tasks with no active blockers
+td search "smtp"            # substring match in title and description
 ```
 
 ## Creating tasks
