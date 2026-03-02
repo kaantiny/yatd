@@ -93,7 +93,9 @@ pub async fn exchange(store: &db::Store, mut wormhole: Wormhole) -> Result<SyncR
         .receive_json::<SyncHandshake>()
         .await
         .context("failed to receive handshake")?
-        .context("peer sent invalid handshake JSON")?;
+        .context(
+            "peer sent incompatible handshake (are both sides running the same version of td?)",
+        )?;
 
     let their_vv = match &their_handshake {
         SyncHandshake::Sync {
@@ -209,7 +211,9 @@ async fn bootstrap_exchange(
         .receive_json::<SyncHandshake>()
         .await
         .context("failed to receive handshake")?
-        .context("peer sent invalid handshake JSON")?;
+        .context(
+            "peer sent incompatible handshake (are both sides running the same version of td?)",
+        )?;
 
     let project_name = match their_handshake {
         SyncHandshake::Sync { project_name, .. } => project_name,
