@@ -14,7 +14,7 @@
 - Verify after changes: `make verify` (formats, typechecks, lints, and tests in one pass)
 
 ## Implementation details
-- Initialization requirement: most commands call `require_root()` and fail unless `.td/` exists somewhere in current dir ancestry (`db::find_root`). Only `init` and `skill` avoid this path.
+- Initialization requirement: most commands call `require_root()` and fail unless `.td/` exists somewhere in current dir ancestry (`db::find_root`). Only `project` and `skill` avoid this path.
 - DB schema is created in `src/db.rs` (`SCHEMA`):
 - Foreign keys are explicitly enabled on each connection (`PRAGMA foreign_keys = ON`).
 - Task IDs:
@@ -34,7 +34,7 @@
   - `predicates` for stdout/stderr assertions
 - Typical pattern:
   1. create temp dir
-  2. run `td init`
+  2. run `td project init`
   3. invoke command under test
   4. assert output and/or inspect `.td/tasks.db` directly with `rusqlite`
 - When adding/changing behavior, prefer extending these CLI tests rather than only unit tests.
@@ -45,7 +45,7 @@
 - JSON structs rely on serde naming alignment (notably `Task.task_type` renamed to `"type"`). Maintain compatibility for import/export and tests.
 
 ## Gotchas
-- Running most commands outside an initialized tree yields `not initialized. Run 'td init'` due to upward root search; tests should set `current_dir` to initialized temp dirs.
+- Running most commands outside an initialized tree yields `not initialized. Run 'td project init'` due to upward root search; tests should set `current_dir` to initialized temp dirs.
 - `Cargo.toml` uses `rusqlite` with `bundled` feature, so SQLite is vendored; build behavior differs from system-SQLite setups.
 
 ## Contributions
