@@ -4,7 +4,7 @@
 - Rust CLI app (`td`) for local task tracking aimed at agent workflows.
 - Storage is SQLite in a per-project `.td/tasks.db` database.
 - Entry flow is `src/main.rs` → `yatd::run()` (`src/lib.rs`) → `cmd::dispatch()` (`src/cmd/mod.rs`).
-- We use jj for version control, not git. DO NOT use Conventional Commits. Do use imperative, Linux kernel-style commits. Always check `jj st` before starting. If there are changes in progress, run `jj new ...` to create a new working copy describe the pending work. If there are no changes in the working copy, run `jj desc ...` to describe the pending work.
+- We use jj for version control, not git. DO NOT use Conventional Commits. Do use imperative, Linux kernel-style commits. Always check `jj st` before starting. If there are changes in progress, run `jj new -m ...` to create a new working copy describing the pending work. If there are no changes in the working copy, run `jj desc -m ...` to describe the pending work.
 - JSON mode is not for "agent consumers". It's for wiring things together, whether the wirer is human or LLM.
 - Contributions are through pr.pico.sh. If you're asked to open a PR or contribute or review a PR or similar and you have the skill, read that. If you don't have the skill, somehow fetch the contents of `https://git.secluded.site/agent-skills/blob/main/skills/collaborating-through-pr-pico-sh/SKILL.md?raw=1`. It's markdown, but served as raw plain text, so curl or any other UA will do fine. If you're not contributing/reviewing yet, don't read it yet.
 
