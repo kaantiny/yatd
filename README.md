@@ -1,9 +1,9 @@
 # yatd, _yet another td_
 
-There are many tds. This one is mine. It's in Rust, very small, very fast, very
-simple, uses SQLite embedded in the binary, and includes a skill. I intend it
-to be the bare minimum for something like a repo-specific issue tracker and
-possibly complementary to tools like [OpenSpec].
+There are many tds. This one is mine. It's in Rust, very fast, very
+small, fairly simple, and includes a skill. I intend it to be the bare
+minimum for something like a repo-specific issue tracker and possibly
+complementary to tools like [OpenSpec].
 
 [OpenSpec]: https://github.com/Fission-AI/OpenSpec
 
@@ -19,10 +19,10 @@ Inspired by [alosec/td].
 
 [alosec/td]: https://github.com/alosec/td/
 
-## Sync Bootstrapping
+## Bootstrapping
 
 When syncing a project to another machine, do **not** run `td init` on
-the other machine.  Initialize just once on the first machine, then
+the other machine. Initialize just once on the first machine, then
 bootstrap others by running `td sync` on the first machine, then `td
 sync wormhole-code` on another.
 
@@ -36,6 +36,38 @@ td sync 5-lurid-gecko
 
 Running `td init` on both machines creates different `project_id` values and
 prevents sync from merging them.
+
+## Usage
+
+There are many ways to use something like this and I won't say any one
+is better than another. However, I tend to use it in a particular way
+and that may lead its design to faciliate that way particularly well.
+
+<details><summary>td on its own</summary>
+
+I first think of a feature, then tell the agent about it and ask it to
+interview me about any gaps. We go back and forth, me nitpicking things
+about what it said, it nitpicking things about what I said, until it
+feels right. Then I say something like "let's think about how we can
+break this up into the smallest units of work and create tasks with
+appropriate dependency relationships to communicate the order in which
+we must tackle them." It creates a bunch of tasks, links them, and
+probably describes what it did. I run td next to see what's bubbled up
+to the top, read through it, and decide whether it needs more work or is
+good to go as-is. If it needs more work, I start a new session with
+"let's think about {id} and plan it out some more, then log those
+decisions to the task". If it's ready, the new session begins with
+"let's get started on {id} by having a look around at the relevant code
+then breaking it down into smaller child tasks". Then depending on the
+context window and task scale, I either have it get started in this same
+session or a new one.
+
+I said it's complementary to things like OpenSpec at the beginning, but
+realise my workflow almost entirely obviates OpenSpec 🥴 I do intend to
+use them together soon and will describe whatever workflow I end up with
+then.
+
+</details>
 
 ```
 $ td --help
