@@ -14,10 +14,16 @@ is a named Loro CRDT document. Directories are bound to projects via
 the canonical path. You can also override with `--project <name>` or the
 `TD_PROJECT` env var.
 
+For multi-machine setup, initialize only once. On the second machine, bootstrap
+from the first with `td sync` instead of `td init` so both sides share the same
+project identity.
+
 ```bash
 td init myproject           # create project + bind cwd to it
 td use myproject            # bind cwd to an existing project
 td projects                 # list all known projects
+td sync                     # machine A: print a wormhole code
+td sync 7-goldfish-soccer   # machine B: bootstrap from machine A
 td --project other list     # one-off override
 TD_PROJECT=other td list    # env override
 ```

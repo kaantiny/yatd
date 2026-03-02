@@ -16,6 +16,23 @@ allowing your agent to use other todo/issue tools in other repos even with this
 global skill. Td IDs are prefixed with `td-`, so pasting the ID should be
 enough of a mention.
 
+## Sync Bootstrapping
+
+When bringing a project to a second machine, do **not** run `td init` again.
+Initialize once on the first machine, then bootstrap the second machine by
+running `td sync` and entering the wormhole code from the first machine.
+
+```sh
+# Machine A (already initialized project)
+td sync
+
+# Machine B (same repo checkout, no td project yet)
+td sync <code-from-machine-a>
+```
+
+Running `td init` on both machines creates different `project_id` values and
+prevents sync from merging them.
+
 Inspired by [alosec/td].
 
 [alosec/td]: https://github.com/alosec/td/

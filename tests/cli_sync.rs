@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use loro::{ExportMode, LoroDoc, VersionVector};
 use predicates::prelude::*;
 
 #[test]
@@ -175,4 +176,99 @@ fn sync_exchanges_tasks_between_peers() {
     assert!(a_titles.contains(&"task from B"));
     assert!(b_titles.contains(&"task from A"));
     assert!(b_titles.contains(&"task from B"));
+}
+
+#[test]
+fn try_open_returns_none_without_binding() {
+    use yatd::db;
+
+    let home = tempfile::tempdir().unwrap();
+    let cwd = tempfile::tempdir().unwrap();
+
+    std::env::set_var("HOME", home.path());
+    assert!(
+        db::try_open(cwd.path()).unwrap().is_none(),
+        "expected no store when cwd is unbound and TD_PROJECT is unset"
+    );
+}
+
+#[test]
+fn bootstrap_from_peer_creates_openable_store() {
+    use yatd::db;
+
+    let home_a = tempfile::tempdir().unwrap();
+    let cwd_a = tempfile::tempdir().unwrap();
+    std::env::set_var("HOME", home_a.path());
+    let source = db::init(cwd_a.path(), "shared").unwrap();
+
+    let id = db::gen_id();
+    source
+        .apply_and_persist(|doc| {
+            let tasks = doc.get_map("tasks");
+            let task = db::insert_task_map(&tasks, &id)?;
+            task.insert("title", "bootstrapped task")?;
+            task.insert("description", "")?;
+            task.insert("type", "task")?;
+            task.insert("priority", "medium")?;
+            task.insert("status", "open")?;
+            task.insert("effort", "medium")?;
+            task.insert("parent", "")?;
+            task.insert("created_at", db::now_utc())?;
+            task.insert("updated_at", db::now_utc())?;
+            task.insert("deleted_at", "")?;
+            task.insert_container("labels", loro::LoroMap::new())?;
+            task.insert_container("blockers", loro::LoroMap::new())?;
+            task.insert_container("logs", loro::LoroMap::new())?;
+            Ok(())
+        })
+        .unwrap();
+
+    let full_delta = source
+        .doc()
+        .export(ExportMode::updates(&VersionVector::default()))
+        .unwrap();
+
+    let home_b = tempfile::tempdir().unwrap();
+    let root_b = home_b.path().join(".local/share/td");
+    let store_b = db::Store::bootstrap_from_peer(&root_b, "shared", &full_delta).unwrap();
+
+    assert_eq!(store_b.project_name(), "shared");
+    assert!(
+        root_b.join("projects/shared/base.loro").exists(),
+        "bootstrap should persist a base snapshot"
+    );
+
+    let reopened = db::Store::open(&root_b, "shared").unwrap();
+    let tasks = reopened.list_tasks().unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].title, "bootstrapped task");
+}
+
+#[test]
+fn bootstrap_from_peer_rejects_missing_project_id() {
+    use yatd::db;
+
+    let doc = LoroDoc::new();
+    doc.get_map("tasks");
+    let meta = doc.get_map("meta");
+    meta.insert("schema_version", 1i64).unwrap();
+    doc.commit();
+
+    let delta = doc
+        .export(ExportMode::updates(&VersionVector::default()))
+        .unwrap();
+
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join(".local/share/td");
+    let err = db::Store::bootstrap_from_peer(&root, "shared", &delta).unwrap_err();
+
+    assert!(
+        err.to_string()
+            .contains("missing required project identity"),
+        "unexpected error: {err:#}"
+    );
+    assert!(
+        !root.join("projects/shared/base.loro").exists(),
+        "bootstrap should not persist snapshot for invalid peer doc"
+    );
 }

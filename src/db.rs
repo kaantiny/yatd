@@ -273,6 +273,40 @@ impl Store {
         })
     }
 
+    /// Bootstrap a local project from peer-provided delta bytes.
+    ///
+    /// The incoming delta is imported into a fresh document, validated to
+    /// ensure it carries `meta.project_id`, and then persisted as a base
+    /// snapshot for future opens.
+    pub fn bootstrap_from_peer(root: &Path, project: &str, delta: &[u8]) -> Result<Self> {
+        validate_project_name(project)?;
+        let project_dir = project_dir(root, project);
+        if project_dir.exists() {
+            bail!("project '{project}' already exists");
+        }
+        fs::create_dir_all(project_dir.join(CHANGES_DIR))?;
+
+        let doc = LoroDoc::new();
+        doc.set_peer_id(load_or_create_device_peer_id(root)?)?;
+        doc.import(delta)
+            .context("failed to import bootstrap delta from peer")?;
+        doc.commit();
+
+        read_project_id_from_doc(&doc)
+            .context("bootstrap delta is missing required project identity")?;
+
+        let snapshot = doc
+            .export(ExportMode::Snapshot)
+            .context("failed to export bootstrap loro snapshot")?;
+        atomic_write_file(&project_dir.join(BASE_FILE), &snapshot)?;
+
+        Ok(Self {
+            root: root.to_path_buf(),
+            project: project.to_string(),
+            doc,
+        })
+    }
+
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -449,8 +483,34 @@ pub fn use_project(cwd: &Path, project: &str) -> Result<()> {
 pub fn open(start: &Path) -> Result<Store> {
     let root = data_root()?;
     let explicit = std::env::var(PROJECT_ENV).ok();
-    let project = resolve_project_name(start, &root, explicit.as_deref())?;
+    let project = resolve_project_name(start, &root, explicit.as_deref())?.ok_or_else(|| {
+        anyhow!(
+            "no project selected. Use --project/TD_PROJECT, run 'td use <name>', or run 'td init <name>'"
+        )
+    })?;
     Store::open(&root, &project)
+}
+
+/// Open the project selected by `--project`/`TD_PROJECT`/bindings if one exists.
+///
+/// Returns `Ok(None)` when no project is selected by any mechanism.
+pub fn try_open(start: &Path) -> Result<Option<Store>> {
+    let root = data_root()?;
+    let explicit = std::env::var(PROJECT_ENV).ok();
+    let Some(project) = resolve_project_name(start, &root, explicit.as_deref())? else {
+        return Ok(None);
+    };
+    Store::open(&root, &project).map(Some)
+}
+
+/// Bootstrap a project from a peer delta and bind the current directory.
+pub fn bootstrap_sync(cwd: &Path, project: &str, delta: &[u8]) -> Result<Store> {
+    let root = data_root()?;
+    fs::create_dir_all(root.join(PROJECTS_DIR))?;
+    validate_project_name(project)?;
+    let store = Store::bootstrap_from_peer(&root, project, delta)?;
+    bind_project(cwd, project)?;
+    Ok(store)
 }
 
 pub fn list_projects() -> Result<Vec<String>> {
@@ -545,10 +605,14 @@ fn bindings_path(root: &Path) -> PathBuf {
     root.join(BINDINGS_FILE)
 }
 
-fn resolve_project_name(start: &Path, root: &Path, explicit: Option<&str>) -> Result<String> {
+fn resolve_project_name(
+    start: &Path,
+    root: &Path,
+    explicit: Option<&str>,
+) -> Result<Option<String>> {
     if let Some(project) = explicit {
         validate_project_name(project)?;
-        return Ok(project.to_string());
+        return Ok(Some(project.to_string()));
     }
 
     let cwd = canonicalize_binding_path(start)?;
@@ -567,12 +631,10 @@ fn resolve_project_name(start: &Path, root: &Path, explicit: Option<&str>) -> Re
     }
 
     if let Some((_, project)) = best {
-        return Ok(project);
+        return Ok(Some(project));
     }
 
-    bail!(
-        "no project selected. Use --project/TD_PROJECT, run 'td use <name>', or run 'td init <name>'"
-    )
+    Ok(None)
 }
 
 fn bind_project(cwd: &Path, project: &str) -> Result<()> {
@@ -635,6 +697,15 @@ fn validate_project_name(name: &str) -> Result<()> {
         bail!("invalid project name '{name}'");
     }
     Ok(())
+}
+
+fn read_project_id_from_doc(doc: &LoroDoc) -> Result<String> {
+    let root = serde_json::to_value(doc.get_deep_value())?;
+    root.get("meta")
+        .and_then(|m| m.get("project_id"))
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| anyhow!("missing meta.project_id in project doc"))
 }
 
 fn hydrate_task(task_id_raw: &str, value: &Value) -> Result<Task> {

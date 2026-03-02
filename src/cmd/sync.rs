@@ -23,14 +23,22 @@ const CODE_WORD_COUNT: usize = 2;
 
 /// Handshake message exchanged before the delta payload.
 #[derive(Debug, Serialize, Deserialize)]
-struct SyncHandshake {
-    /// Human-readable project name.
-    project_name: String,
-    /// Stable identity (ULID stored in the doc's root meta map).
-    project_id: String,
-    /// Serialised version vector so the peer can compute a minimal delta.
-    #[serde(with = "vv_serde")]
-    version_vector: VersionVector,
+#[serde(tag = "mode")]
+enum SyncHandshake {
+    Sync {
+        /// Human-readable project name.
+        project_name: String,
+        /// Stable identity (ULID stored in the doc's root meta map).
+        project_id: String,
+        /// Serialised version vector so the peer can compute a minimal delta.
+        #[serde(with = "vv_serde")]
+        version_vector: VersionVector,
+    },
+    Bootstrap {
+        /// Serialised version vector so the peer can compute a minimal delta.
+        #[serde(with = "vv_serde")]
+        version_vector: VersionVector,
+    },
 }
 
 /// Serde adapter for `VersionVector` using its postcard `encode()`/`decode()`.
@@ -69,11 +77,10 @@ pub fn wormhole_config() -> AppConfig<serde_json::Value> {
 /// peer sends its version vector, receives the other's, computes a
 /// minimal delta, sends it, receives the peer's delta, and imports it.
 pub async fn exchange(store: &db::Store, mut wormhole: Wormhole) -> Result<SyncReport> {
-    let my_vv = store.doc().oplog_vv();
-    let my_handshake = SyncHandshake {
+    let my_handshake = SyncHandshake::Sync {
         project_name: store.project_name().to_string(),
         project_id: read_project_id(store)?,
-        version_vector: my_vv,
+        version_vector: store.doc().oplog_vv(),
     };
 
     // --- Phase 1: exchange handshakes ---
@@ -88,21 +95,39 @@ pub async fn exchange(store: &db::Store, mut wormhole: Wormhole) -> Result<SyncR
         .context("failed to receive handshake")?
         .context("peer sent invalid handshake JSON")?;
 
-    if my_handshake.project_id != their_handshake.project_id {
-        let _ = wormhole.close().await;
-        bail!(
-            "project identity mismatch: local '{}' ({}) vs peer '{}' ({})",
-            my_handshake.project_name,
-            my_handshake.project_id,
-            their_handshake.project_name,
-            their_handshake.project_id,
-        );
-    }
+    let their_vv = match &their_handshake {
+        SyncHandshake::Sync {
+            project_name,
+            project_id,
+            version_vector,
+        } => {
+            let (my_project_name, my_project_id) = match &my_handshake {
+                SyncHandshake::Sync {
+                    project_name,
+                    project_id,
+                    ..
+                } => (project_name, project_id),
+                SyncHandshake::Bootstrap { .. } => unreachable!("sync exchange always uses Sync"),
+            };
+            if my_project_id != project_id {
+                let _ = wormhole.close().await;
+                bail!(
+                    "project identity mismatch: local '{}' ({}) vs peer '{}' ({}). If this is the same logical project, remove the accidentally initted local copy and bootstrap with 'td sync' instead of running 'td init' on both machines",
+                    my_project_name,
+                    my_project_id,
+                    project_name,
+                    project_id,
+                );
+            }
+            version_vector
+        }
+        SyncHandshake::Bootstrap { version_vector } => version_vector,
+    };
 
     // --- Phase 2: compute and exchange deltas ---
     let my_delta = store
         .doc()
-        .export(ExportMode::updates(&their_handshake.version_vector))
+        .export(ExportMode::updates(their_vv))
         .context("failed to export delta for peer")?;
 
     wormhole
@@ -143,10 +168,90 @@ pub fn run(root: &Path, code: Option<&str>, json: bool) -> Result<()> {
 }
 
 async fn run_async(root: &Path, code: Option<&str>, json: bool) -> Result<()> {
-    let store = db::open(root)?;
+    let maybe_store = db::try_open(root)?;
     let c = crate::color::stderr_theme();
 
-    let wormhole = match code {
+    let wormhole = connect_wormhole(code, json, c).await?;
+
+    let (store, report) = if let Some(store) = maybe_store {
+        if !json {
+            eprintln!("{}wormhole:{} connected, syncing...", c.blue, c.reset);
+        }
+        let report = exchange(&store, wormhole).await?;
+        (store, report)
+    } else {
+        if !json {
+            eprintln!(
+                "{}wormhole:{} connected, bootstrapping from peer...",
+                c.blue, c.reset
+            );
+        }
+        bootstrap_exchange(root, wormhole).await?
+    };
+
+    print_sync_report(&store, &report, json, c)?;
+
+    Ok(())
+}
+
+async fn bootstrap_exchange(
+    root: &Path,
+    mut wormhole: Wormhole,
+) -> Result<(db::Store, SyncReport)> {
+    wormhole
+        .send_json(&SyncHandshake::Bootstrap {
+            version_vector: VersionVector::default(),
+        })
+        .await
+        .context("failed to send bootstrap handshake")?;
+
+    let their_handshake: SyncHandshake = wormhole
+        .receive_json::<SyncHandshake>()
+        .await
+        .context("failed to receive handshake")?
+        .context("peer sent invalid handshake JSON")?;
+
+    let project_name = match their_handshake {
+        SyncHandshake::Sync { project_name, .. } => project_name,
+        SyncHandshake::Bootstrap { .. } => {
+            let _ = wormhole.close().await;
+            bail!(
+                "both peers are in bootstrap mode. Run 'td init <project>' on one machine first, then run 'td sync' on the other"
+            );
+        }
+    };
+
+    wormhole
+        .send(Vec::new())
+        .await
+        .context("failed to send bootstrap delta")?;
+
+    let their_delta = wormhole
+        .receive()
+        .await
+        .context("failed to receive bootstrap delta from peer")?;
+
+    wormhole.close().await.context("failed to close wormhole")?;
+
+    if their_delta.is_empty() {
+        bail!("peer sent empty bootstrap delta");
+    }
+
+    let store = db::bootstrap_sync(root, &project_name, &their_delta)?;
+    let report = SyncReport {
+        sent_bytes: 0,
+        received_bytes: their_delta.len(),
+        imported: true,
+    };
+    Ok((store, report))
+}
+
+async fn connect_wormhole(
+    code: Option<&str>,
+    json: bool,
+    c: &crate::color::Theme,
+) -> Result<Wormhole> {
+    match code {
         None => {
             let mailbox = MailboxConnection::create(wormhole_config(), CODE_WORD_COUNT)
                 .await
@@ -166,7 +271,7 @@ async fn run_async(root: &Path, code: Option<&str>, json: bool) -> Result<()> {
 
             Wormhole::connect(mailbox)
                 .await
-                .context("wormhole key exchange failed")?
+                .context("wormhole key exchange failed")
         }
         Some(raw) => {
             let code: Code = raw.parse().context("invalid wormhole code")?;
@@ -180,16 +285,17 @@ async fn run_async(root: &Path, code: Option<&str>, json: bool) -> Result<()> {
 
             Wormhole::connect(mailbox)
                 .await
-                .context("wormhole key exchange failed")?
+                .context("wormhole key exchange failed")
         }
-    };
-
-    if !json {
-        eprintln!("{}wormhole:{} connected, syncing...", c.blue, c.reset);
     }
+}
 
-    let report = exchange(&store, wormhole).await?;
-
+fn print_sync_report(
+    store: &db::Store,
+    report: &SyncReport,
+    json: bool,
+    c: &crate::color::Theme,
+) -> Result<()> {
     if json {
         println!(
             "{}",
@@ -215,7 +321,6 @@ async fn run_async(root: &Path, code: Option<&str>, json: bool) -> Result<()> {
             eprintln!("{}info:{} peer had no new changes", c.blue, c.reset);
         }
     }
-
     Ok(())
 }
 
