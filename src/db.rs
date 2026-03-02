@@ -248,7 +248,7 @@ impl Store {
         let base_path = project_dir.join(BASE_FILE);
 
         if !base_path.exists() {
-            bail!("project '{project}' is not initialized. Run 'td init {project}'");
+            bail!("project '{project}' is not initialized. Run 'td project init {project}'");
         }
 
         let base = fs::read(&base_path)
@@ -561,7 +561,7 @@ pub fn use_project(cwd: &Path, project: &str) -> Result<()> {
     let root = data_root()?;
     validate_project_name(project)?;
     if !project_dir(&root, project).join(BASE_FILE).exists() {
-        bail!("project '{project}' not found. Run 'td projects' to list known projects");
+        bail!("project '{project}' not found. Run 'td project list' to list known projects");
     }
     bind_project(cwd, project)
 }
@@ -571,7 +571,7 @@ pub fn open(start: &Path) -> Result<Store> {
     let explicit = std::env::var(PROJECT_ENV).ok();
     let project = resolve_project_name(start, &root, explicit.as_deref())?.ok_or_else(|| {
         anyhow!(
-            "no project selected. Use --project/TD_PROJECT, run 'td use <name>', or run 'td init <name>'"
+            "no project selected. Use --project/TD_PROJECT, run 'td project bind <name>', or run 'td project init <name>'"
         )
     })?;
     Store::open(&root, &project)
@@ -723,6 +723,40 @@ fn resolve_project_name(
     }
 
     Ok(None)
+}
+
+pub fn unbind_project(cwd: &Path) -> Result<()> {
+    let root = data_root()?;
+    let canonical = canonicalize_binding_path(cwd)?;
+    let canonical_str = canonical.to_string_lossy().to_string();
+
+    let mut bindings = load_bindings(&root)?;
+    if !bindings.bindings.contains_key(&canonical_str) {
+        bail!("path '{}' is not bound to any project", canonical.display());
+    }
+    bindings.bindings.remove(&canonical_str);
+    save_bindings(&root, &bindings)
+}
+
+pub fn delete_project(name: &str) -> Result<()> {
+    validate_project_name(name)?;
+    let root = data_root()?;
+    let proj_dir = project_dir(&root, name);
+
+    if !proj_dir.join(BASE_FILE).exists() {
+        bail!("project '{name}' not found");
+    }
+
+    fs::remove_dir_all(&proj_dir).with_context(|| {
+        format!(
+            "failed to remove project directory '{}'",
+            proj_dir.display()
+        )
+    })?;
+
+    let mut bindings = load_bindings(&root)?;
+    bindings.bindings.retain(|_, project| project != name);
+    save_bindings(&root, &bindings)
 }
 
 fn bind_project(cwd: &Path, project: &str) -> Result<()> {

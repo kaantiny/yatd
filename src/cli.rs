@@ -17,20 +17,11 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
-    /// Initialize a central project and bind the current directory to it
-    Init {
-        /// Project name
-        name: String,
+    /// Manage projects
+    Project {
+        #[command(subcommand)]
+        action: ProjectAction,
     },
-
-    /// Bind the current directory to an existing project
-    Use {
-        /// Project name
-        name: String,
-    },
-
-    /// List all known projects in central storage
-    Projects,
 
     /// Create a new task
     #[command(visible_alias = "add")]
@@ -264,4 +255,27 @@ pub enum LabelAction {
     },
     /// List all distinct labels
     ListAll,
+}
+
+#[derive(Subcommand)]
+pub enum ProjectAction {
+    /// Initialise a central project and bind the current directory to it
+    Init {
+        /// Project name
+        name: String,
+    },
+    /// Bind the current directory to an existing project
+    Bind {
+        /// Project name
+        name: String,
+    },
+    /// Remove the binding for the current directory
+    Unbind,
+    /// Delete a project from central storage and remove all directory bindings
+    Delete {
+        /// Project name
+        name: String,
+    },
+    /// List all known projects in central storage
+    List,
 }
