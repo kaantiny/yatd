@@ -43,7 +43,7 @@ There are many ways to use something like this and I won't say any one
 is better than another. However, I tend to use it in a particular way
 and that may lead its design to faciliate that way particularly well.
 
-<details><summary>td on its own</summary>
+<details><summary>td on its own (click to expand)</summary>
 
 I first think of a feature, then tell the agent about it and ask it to
 interview me about any gaps. We go back and forth, me nitpicking things
