@@ -3,12 +3,11 @@ mod dep;
 mod done;
 mod export;
 mod import;
-mod init;
 mod label;
 mod list;
 mod log;
 mod next;
-mod projects;
+mod project;
 mod ready;
 mod reopen;
 mod rm;
@@ -19,7 +18,6 @@ mod stats;
 pub mod sync;
 mod tidy;
 mod update;
-mod r#use;
 
 use crate::cli::{Cli, Command};
 use crate::db;
@@ -35,12 +33,7 @@ pub fn dispatch(cli: &Cli) -> Result<()> {
     }
 
     match &cli.command {
-        Command::Init { name } => {
-            let root = std::env::current_dir()?;
-            init::run(&root, name, cli.json)
-        }
-        Command::Use { name } => r#use::run(name, cli.json),
-        Command::Projects => projects::run(cli.json),
+        Command::Project { action } => project::run(action, cli.json),
         Command::Create {
             title,
             priority,

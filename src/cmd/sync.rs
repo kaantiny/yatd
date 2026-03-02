@@ -114,7 +114,7 @@ pub async fn exchange(store: &db::Store, mut wormhole: Wormhole) -> Result<SyncR
             if my_project_id != project_id {
                 let _ = wormhole.close().await;
                 bail!(
-                    "project identity mismatch: local '{}' ({}) vs peer '{}' ({}). If this is the same logical project, remove the accidentally initted local copy and bootstrap with 'td sync' instead of running 'td init' on both machines",
+                    "project identity mismatch: local '{}' ({}) vs peer '{}' ({}). If this is the same logical project, remove the accidentally initted local copy and bootstrap with 'td sync' instead of running 'td project init <project>' on both machines",
                     my_project_name,
                     my_project_id,
                     project_name,
@@ -220,7 +220,7 @@ async fn bootstrap_exchange(
         SyncHandshake::Bootstrap { .. } => {
             let _ = wormhole.close().await;
             bail!(
-                "both peers are in bootstrap mode. Run 'td init <project>' on one machine first, then run 'td sync' on the other"
+                "both peers are in bootstrap mode. Run 'td project init <project>' on one machine first, then run 'td sync' on the other"
             );
         }
     };
