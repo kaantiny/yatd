@@ -1,10 +1,10 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use loro::{ExportMode, LoroDoc, VersionVector};
 use predicates::prelude::*;
 
 #[test]
 fn sync_help_shows_usage() {
-    let mut cmd = Command::cargo_bin("td").unwrap();
+    let mut cmd = cargo_bin_cmd!("td");
     cmd.args(["sync", "--help"]);
     cmd.assert()
         .success()
@@ -16,15 +16,14 @@ fn sync_invalid_code_format_fails() {
     let home = tempfile::tempdir().unwrap();
     let cwd = tempfile::tempdir().unwrap();
 
-    Command::cargo_bin("td")
-        .unwrap()
+    cargo_bin_cmd!("td")
         .args(["project", "init", "synctest"])
         .current_dir(cwd.path())
         .env("HOME", home.path())
         .assert()
         .success();
 
-    let mut cmd = Command::cargo_bin("td").unwrap();
+    let mut cmd = cargo_bin_cmd!("td");
     cmd.args(["sync", "not-a-valid-code"])
         .current_dir(cwd.path())
         .env("HOME", home.path());

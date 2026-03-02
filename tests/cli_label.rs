@@ -1,9 +1,9 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 use tempfile::TempDir;
 
-fn td(home: &TempDir) -> Command {
-    let mut cmd = Command::cargo_bin("td").unwrap();
+fn td(home: &TempDir) -> assert_cmd::Command {
+    let mut cmd = cargo_bin_cmd!("td");
     cmd.env("HOME", home.path());
     cmd
 }
