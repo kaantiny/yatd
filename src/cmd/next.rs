@@ -21,16 +21,16 @@ pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool)
     let store = db::open(root)?;
     let all = store.list_tasks()?;
 
-    let open_tasks: Vec<(String, String, i32, i32)> = all
+    let open_tasks: Vec<score::TaskInput> = all
         .iter()
         .filter(|t| t.status == db::Status::Open)
-        .map(|t| {
-            (
-                t.id.as_str().to_string(),
-                t.title.clone(),
-                t.priority.score(),
-                t.effort.score(),
-            )
+        .map(|t| score::TaskInput {
+            id: t.id.as_str().to_string(),
+            title: t.title.clone(),
+            priority_score: t.priority.score(),
+            effort_score: t.effort.score(),
+            priority_label: db::priority_label(t.priority).to_string(),
+            effort_label: db::effort_label(t.effort).to_string(),
         })
         .collect();
 

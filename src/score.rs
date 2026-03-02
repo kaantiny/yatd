@@ -19,6 +19,24 @@ pub enum Mode {
     Effort,
 }
 
+/// Input task supplied by callers to [`rank`].
+///
+/// Separates the label strings (for output) from the integer scores (for
+/// computation), so callers don't have to reverse-engineer labels from ints.
+#[derive(Debug, Clone)]
+pub struct TaskInput {
+    pub id: String,
+    pub title: String,
+    /// Integer score used for weighting (1=high, 2=medium, 3=low for priority).
+    pub priority_score: i32,
+    /// Integer score used for weighting (1=low, 2=medium, 3=high for effort).
+    pub effort_score: i32,
+    /// Human-readable label, e.g. `"high"`, `"medium"`, `"low"`.
+    pub priority_label: String,
+    /// Human-readable label, e.g. `"low"`, `"medium"`, `"high"`.
+    pub effort_label: String,
+}
+
 /// A lightweight snapshot of a task for scoring purposes.
 #[derive(Debug, Clone)]
 pub struct TaskNode {
@@ -32,8 +50,10 @@ pub struct TaskNode {
 pub struct ScoredTask {
     pub id: String,
     pub title: String,
-    pub priority: i32,
-    pub effort: i32,
+    /// Original priority label (`"high"` / `"medium"` / `"low"`).
+    pub priority: String,
+    /// Original effort label (`"low"` / `"medium"` / `"high"`).
+    pub effort: String,
     pub score: f64,
     pub downstream_score: f64,
     pub priority_weight: f64,
@@ -112,32 +132,36 @@ fn downstream(
 /// Score and rank ready tasks.
 ///
 /// # Arguments
-/// * `open_tasks` — all open tasks (id, title, priority, effort)
+/// * `open_tasks` — all open tasks, including both scoring integers and display labels
 /// * `blocker_edges` — `(task_id, blocker_id)` pairs among open tasks
 /// * `exclude` — task IDs to exclude from candidates (still counted in
 ///   downstream scores). Used to filter parent tasks that have open subtasks.
 /// * `mode` — scoring strategy
 /// * `limit` — maximum number of results to return
 pub fn rank(
-    open_tasks: &[(String, String, i32, i32)],
+    open_tasks: &[TaskInput],
     blocker_edges: &[(String, String)],
     exclude: &HashSet<String>,
     mode: Mode,
     limit: usize,
 ) -> Vec<ScoredTask> {
-    // Build node map.
+    // Build node map and label lookup.
     let mut nodes: HashMap<String, TaskNode> = HashMap::new();
     let mut titles: HashMap<String, String> = HashMap::new();
-    for (id, title, priority, effort) in open_tasks {
+    let mut priority_labels: HashMap<String, String> = HashMap::new();
+    let mut effort_labels: HashMap<String, String> = HashMap::new();
+    for t in open_tasks {
         nodes.insert(
-            id.clone(),
+            t.id.clone(),
             TaskNode {
-                id: id.clone(),
-                priority: *priority,
-                effort: *effort,
+                id: t.id.clone(),
+                priority: t.priority_score,
+                effort: t.effort_score,
             },
         );
-        titles.insert(id.clone(), title.clone());
+        titles.insert(t.id.clone(), t.title.clone());
+        priority_labels.insert(t.id.clone(), t.priority_label.clone());
+        effort_labels.insert(t.id.clone(), t.effort_label.clone());
     }
 
     // Build adjacency lists.
@@ -183,8 +207,8 @@ pub fn rank(
             ScoredTask {
                 id: node.id.clone(),
                 title: titles.get(&node.id).cloned().unwrap_or_default(),
-                priority: node.priority,
-                effort: node.effort,
+                priority: priority_labels.get(&node.id).cloned().unwrap_or_default(),
+                effort: effort_labels.get(&node.id).cloned().unwrap_or_default(),
                 score,
                 downstream_score: ds,
                 priority_weight: pw,
@@ -211,8 +235,26 @@ pub fn rank(
 mod tests {
     use super::*;
 
-    fn task(id: &str, title: &str, pri: i32, eff: i32) -> (String, String, i32, i32) {
-        (id.to_string(), title.to_string(), pri, eff)
+    fn task(id: &str, title: &str, pri: i32, eff: i32) -> TaskInput {
+        // Map integer scores back to labels for test convenience.
+        let priority_label = match pri {
+            1 => "high",
+            2 => "medium",
+            _ => "low",
+        };
+        let effort_label = match eff {
+            1 => "low",
+            2 => "medium",
+            _ => "high",
+        };
+        TaskInput {
+            id: id.to_string(),
+            title: title.to_string(),
+            priority_score: pri,
+            effort_score: eff,
+            priority_label: priority_label.to_string(),
+            effort_label: effort_label.to_string(),
+        }
     }
 
     fn edge(task_id: &str, blocker_id: &str) -> (String, String) {

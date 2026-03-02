@@ -162,6 +162,27 @@ fn next_json_empty() {
 }
 
 #[test]
+fn next_json_priority_and_effort_are_strings() {
+    // Regression: next --json was emitting priority/effort as raw integers
+    // (1/2/3) instead of string labels ("high"/"medium"/"low"). Every other
+    // JSON endpoint uses string labels; next must match.
+    let tmp = init_tmp();
+    create_task(&tmp, "Task", "high", "low");
+
+    let out = td(&tmp)
+        .args(["--json", "next"])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let results = v.as_array().unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0]["priority"].as_str().unwrap(), "high");
+    assert_eq!(results[0]["effort"].as_str().unwrap(), "low");
+}
+
+#[test]
 fn next_invalid_mode_fails() {
     let tmp = init_tmp();
     create_task(&tmp, "X", "medium", "medium");
