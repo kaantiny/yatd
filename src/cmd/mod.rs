@@ -1,5 +1,6 @@
 mod create;
 mod dep;
+mod doctor;
 mod done;
 mod export;
 mod import;
@@ -151,6 +152,10 @@ pub fn dispatch(cli: &Cli) -> Result<()> {
         Command::Stats => {
             let root = require_root()?;
             stats::run(&root)
+        }
+        Command::Doctor { fix } => {
+            let root = require_root()?;
+            doctor::run(&root, *fix, cli.json)
         }
         Command::Tidy => {
             let root = require_root()?;

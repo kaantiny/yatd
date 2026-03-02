@@ -183,6 +183,13 @@ pub enum Command {
     /// Show task statistics (always JSON)
     Stats,
 
+    /// Diagnose and repair CRDT document integrity
+    Doctor {
+        /// Apply non-destructive repairs
+        #[arg(long)]
+        fix: bool,
+    },
+
     /// Compact accumulated delta files into the base snapshot
     Tidy,
 
