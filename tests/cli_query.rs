@@ -159,11 +159,30 @@ fn stats_counts_tasks() {
 fn compact_succeeds() {
     let tmp = init_tmp();
     create_task(&tmp, "Anything");
+    create_task(&tmp, "Anything else");
+
+    let changes = tmp.path().join(".local/share/td/projects/main/changes");
+    let count_before = std::fs::read_dir(&changes)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("loro"))
+        .count();
+    assert!(count_before > 0);
 
     td(&tmp)
         .arg("compact")
         .current_dir(&tmp)
         .assert()
         .success()
-        .stderr(predicate::str::contains("writing compacted snapshot"));
+        .stderr(predicate::str::contains("writing compacted snapshot"))
+        .stderr(predicate::str::contains("removed"));
+
+    let count_after = std::fs::read_dir(&changes)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("loro"))
+        .count();
+    assert_eq!(count_after, 0);
 }

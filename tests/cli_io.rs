@@ -163,3 +163,65 @@ fn export_import_preserves_effort() {
     let v2: serde_json::Value = serde_json::from_slice(&out2.stdout).unwrap();
     assert_eq!(v2[0]["effort"].as_str().unwrap(), "high");
 }
+
+#[test]
+fn import_merges_labels_and_logs_for_existing_task() {
+    let tmp = init_tmp();
+
+    let out = td(&tmp)
+        .args(["--json", "create", "Merge me", "-l", "local"])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let created: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let id = created["id"].as_str().unwrap().to_string();
+
+    td(&tmp)
+        .args(["log", &id, "local note"])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    let out = td(&tmp)
+        .args(["--json", "show", &id])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let mut imported: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    imported["labels"] = serde_json::json!(["remote"]);
+    imported["logs"] = serde_json::json!([
+        {
+            "id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+            "timestamp": "2026-03-01T00:00:00Z",
+            "message": "remote note"
+        }
+    ]);
+
+    let import_file = tmp.path().join("merge.jsonl");
+    std::fs::write(&import_file, format!("{}\n", imported)).unwrap();
+
+    td(&tmp)
+        .args(["import", import_file.to_str().unwrap()])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    let out = td(&tmp)
+        .args(["--json", "show", &id])
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+    let merged: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+
+    let labels = merged["labels"].as_array().unwrap();
+    assert!(labels.contains(&serde_json::Value::String("local".into())));
+    assert!(labels.contains(&serde_json::Value::String("remote".into())));
+
+    let logs = merged["logs"].as_array().unwrap();
+    let messages: Vec<&str> = logs
+        .iter()
+        .filter_map(|entry| entry["message"].as_str())
+        .collect();
+    assert!(messages.contains(&"local note"));
+    assert!(messages.contains(&"remote note"));
+}

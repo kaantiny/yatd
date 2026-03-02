@@ -296,6 +296,19 @@ impl Store {
         Ok(out)
     }
 
+    /// Delete persisted delta files after a fresh snapshot has been written.
+    pub fn purge_deltas(&self) -> Result<usize> {
+        let project_dir = project_dir(&self.root, &self.project);
+        let paths = collect_delta_paths(&project_dir)?;
+        let mut removed = 0usize;
+        for path in paths {
+            fs::remove_file(&path)
+                .with_context(|| format!("failed removing delta '{}'", path.display()))?;
+            removed += 1;
+        }
+        Ok(removed)
+    }
+
     /// Apply a local mutation and persist only the resulting delta.
     pub fn apply_and_persist<F>(&self, mutator: F) -> Result<PathBuf>
     where

@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use loro::LoroMap;
 use serde::Deserialize;
 use std::io::BufRead;
 use std::path::Path;
@@ -93,21 +92,21 @@ pub fn run(root: &Path, file: &str) -> Result<()> {
             task.insert("updated_at", t.updated_at.clone())?;
             task.insert("deleted_at", t.deleted_at.as_deref().unwrap_or(""))?;
 
-            let labels = task.insert_container("labels", LoroMap::new())?;
+            let labels = db::get_or_create_child_map(&task, "labels")?;
             for lbl in &t.labels {
                 labels.insert(lbl, true)?;
             }
-            let blockers = task.insert_container("blockers", LoroMap::new())?;
+            let blockers = db::get_or_create_child_map(&task, "blockers")?;
             for blk in &t.blockers {
                 let parsed =
                     db::TaskId::parse(blk).map_err(|_| anyhow!("invalid blocker id '{blk}'"))?;
                 blockers.insert(parsed.as_str(), true)?;
             }
-            let logs = task.insert_container("logs", LoroMap::new())?;
+            let logs = db::get_or_create_child_map(&task, "logs")?;
             for entry in &t.logs {
                 let log_id = db::TaskId::parse(&entry.id)
                     .map_err(|_| anyhow!("invalid log id '{}'", entry.id))?;
-                let record = logs.insert_container(log_id.as_str(), LoroMap::new())?;
+                let record = logs.get_or_create_container(log_id.as_str(), loro::LoroMap::new())?;
                 record.insert("timestamp", entry.timestamp.clone())?;
                 record.insert("message", entry.message.clone())?;
             }
