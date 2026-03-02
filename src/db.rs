@@ -16,7 +16,7 @@ const CHANGES_DIR: &str = "changes";
 const BINDINGS_FILE: &str = "bindings.json";
 const BASE_FILE: &str = "base.loro";
 const TMP_SUFFIX: &str = ".tmp";
-const SCHEMA_VERSION: u32 = 1;
+use crate::migrate;
 
 /// Current UTC time in ISO 8601 format.
 pub fn now_utc() -> String {
@@ -226,7 +226,7 @@ impl Store {
         doc.get_map("tasks");
 
         let meta = doc.get_map("meta");
-        meta.insert("schema_version", SCHEMA_VERSION as i64)?;
+        meta.insert("schema_version", migrate::CURRENT_SCHEMA_VERSION as i64)?;
         meta.insert("project_id", Ulid::new().to_string())?;
         meta.insert("created_at", now_utc())?;
 
@@ -276,6 +276,20 @@ impl Store {
             }
         }
 
+        // Apply any pending schema upgrades and persist the resulting delta
+        // so subsequent opens don't repeat the work.
+        let before_vv = doc.oplog_vv();
+        let upgraded = migrate::ensure_current(&doc)?;
+        if upgraded {
+            doc.commit();
+            let delta = doc
+                .export(ExportMode::updates(&before_vv))
+                .context("failed to export schema upgrade delta")?;
+            let filename = format!("{}.loro", Ulid::new());
+            let delta_path = project_dir.join(CHANGES_DIR).join(filename);
+            atomic_write_file(&delta_path, &delta)?;
+        }
+
         Ok(Self {
             root: root.to_path_buf(),
             project: project.to_string(),
@@ -304,6 +318,11 @@ impl Store {
 
         read_project_id_from_doc(&doc)
             .context("bootstrap delta is missing required project identity")?;
+
+        // Upgrade the peer's document before snapshotting so the local
+        // copy is always at CURRENT_SCHEMA_VERSION from the start.
+        migrate::ensure_current(&doc)?;
+        doc.commit();
 
         let snapshot = doc
             .export(ExportMode::Snapshot)
@@ -502,16 +521,7 @@ impl Store {
     }
 
     pub fn schema_version(&self) -> Result<u32> {
-        let root = serde_json::to_value(self.doc.get_deep_value())?;
-        let meta = root
-            .get("meta")
-            .and_then(Value::as_object)
-            .ok_or_else(|| anyhow!("missing root meta map"))?;
-        let n = meta
-            .get("schema_version")
-            .and_then(Value::as_u64)
-            .ok_or_else(|| anyhow!("invalid or missing meta.schema_version"))?;
-        Ok(n as u32)
+        migrate::read_schema_version(&self.doc)
     }
 }
 

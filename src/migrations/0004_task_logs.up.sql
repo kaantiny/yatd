@@ -1,7 +1,0 @@
-CREATE TABLE task_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id TEXT NOT NULL,
-    timestamp TEXT NOT NULL,
-    body TEXT NOT NULL,
-    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
-);
