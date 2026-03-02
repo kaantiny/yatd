@@ -107,10 +107,37 @@ pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool)
         println!("{table}");
 
         if verbose {
-            println!();
+            let mode_label = match mode {
+                Mode::Impact => "impact",
+                Mode::Effort => "effort",
+            };
+            println!("\nmode: {mode_label}");
             for (i, s) in scored.iter().enumerate() {
                 let short = db::TaskId::display_id(&s.id);
-                println!("{}. {} — score: {:.2}", i + 1, short, s.score);
+                let formula = match mode {
+                    Mode::Impact => format!(
+                        "({:.2} + 1.00) × {:.2} / {:.2}^0.25 = {:.2}",
+                        s.downstream_score, s.priority_weight, s.effort_weight, s.score
+                    ),
+                    Mode::Effort => format!(
+                        "({:.2} × 0.25 + 1.00) × {:.2} / {:.2}² = {:.2}",
+                        s.downstream_score, s.priority_weight, s.effort_weight, s.score
+                    ),
+                };
+                let task_word = if s.total_unblocked == 1 {
+                    "task"
+                } else {
+                    "tasks"
+                };
+                println!(
+                    "\n{}. {}\n   {}\n   Unblocks: {} {} ({} directly)",
+                    i + 1,
+                    short,
+                    formula,
+                    s.total_unblocked,
+                    task_word,
+                    s.direct_unblocked
+                );
             }
         }
     }

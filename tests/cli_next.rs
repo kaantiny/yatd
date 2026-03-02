@@ -115,7 +115,9 @@ fn next_verbose_shows_equation() {
         .assert()
         .success()
         .stdout(predicate::str::contains("SCORE"))
-        .stdout(predicate::str::contains("score:"));
+        .stdout(predicate::str::contains("mode: impact"))
+        .stdout(predicate::str::contains("^0.25"))
+        .stdout(predicate::str::contains("Unblocks:"));
 }
 
 #[test]
@@ -129,7 +131,58 @@ fn next_verbose_effort_mode_shows_squared() {
         .assert()
         .success()
         .stdout(predicate::str::contains("SCORE"))
-        .stdout(predicate::str::contains("score:"));
+        .stdout(predicate::str::contains("mode: effort"))
+        .stdout(predicate::str::contains("²"))
+        .stdout(predicate::str::contains("Unblocks:"));
+}
+
+#[test]
+fn next_verbose_unblocks_singular() {
+    // A blocks B. A is ready and directly unblocks exactly 1 task, so the
+    // output must say "1 task", not "1 tasks".
+    let tmp = init_tmp();
+    let a = create_task(&tmp, "Blocker", "medium", "low");
+    let b = create_task(&tmp, "Blocked", "medium", "low");
+
+    td(&tmp)
+        .args(["dep", "add", &b, &a])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    td(&tmp)
+        .args(["next", "--verbose"])
+        .current_dir(&tmp)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Unblocks: 1 task (1 directly)"));
+}
+
+#[test]
+fn next_verbose_unblocks_count_with_transitive() {
+    // A blocks B, B blocks C. A is ready with 2 total unblocked (1 directly).
+    let tmp = init_tmp();
+    let a = create_task(&tmp, "Root", "medium", "low");
+    let b = create_task(&tmp, "Mid", "medium", "low");
+    let c = create_task(&tmp, "Leaf", "medium", "low");
+
+    td(&tmp)
+        .args(["dep", "add", &b, &a])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+    td(&tmp)
+        .args(["dep", "add", &c, &b])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    td(&tmp)
+        .args(["next", "--verbose"])
+        .current_dir(&tmp)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Unblocks: 2 tasks (1 directly)"));
 }
 
 #[test]
