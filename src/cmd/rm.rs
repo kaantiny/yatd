@@ -38,11 +38,11 @@ pub fn run(root: &Path, ids: &[String], recursive: bool, force: bool, json: bool
         .map(|id| id.as_str().to_string())
         .collect();
 
-    let unblocked_ids: Vec<String> = all
+    let unblocked_ids: Vec<db::TaskId> = all
         .iter()
         .filter(|t| !deleted_set.contains(t.id.as_str()))
         .filter(|t| t.blockers.iter().any(|b| deleted_set.contains(b.as_str())))
-        .map(|t| t.id.as_str().to_string())
+        .map(|t| t.id.clone())
         .collect();
 
     let ts = db::now_utc();
@@ -73,10 +73,8 @@ pub fn run(root: &Path, ids: &[String], recursive: bool, force: bool, json: bool
     })?;
 
     if !force && !unblocked_ids.is_empty() {
-        eprintln!(
-            "warning: removed blockers from {}",
-            unblocked_ids.join(", ")
-        );
+        let short: Vec<String> = unblocked_ids.iter().map(ToString::to_string).collect();
+        eprintln!("warning: removed blockers from {}", short.join(", "));
     }
 
     if json {
@@ -86,7 +84,10 @@ pub fn run(root: &Path, ids: &[String], recursive: bool, force: bool, json: bool
                 .iter()
                 .map(|id| id.as_str().to_string())
                 .collect(),
-            unblocked_ids,
+            unblocked_ids: unblocked_ids
+                .iter()
+                .map(|id| id.as_str().to_string())
+                .collect(),
         };
         println!("{}", serde_json::to_string(&out)?);
     } else {

@@ -96,9 +96,10 @@ pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool)
         table.set_header(vec!["#", "ID", "SCORE", "TITLE"]);
 
         for (i, s) in scored.iter().enumerate() {
+            let short = db::TaskId::display_id(&s.id);
             table.add_row(vec![
                 Cell::new(i + 1),
-                cell_bold(&s.id, use_color),
+                cell_bold(&short, use_color),
                 Cell::new(format!("{:.2}", s.score)),
                 Cell::new(&s.title),
             ]);
@@ -108,7 +109,8 @@ pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool)
         if verbose {
             println!();
             for (i, s) in scored.iter().enumerate() {
-                println!("{}. {} — score: {:.2}", i + 1, s.id, s.score);
+                let short = db::TaskId::display_id(&s.id);
+                println!("{}. {} — score: {:.2}", i + 1, short, s.score);
             }
         }
     }

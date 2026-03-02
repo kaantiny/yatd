@@ -137,7 +137,7 @@ fn rm_detaches_dependents_and_warns() {
         .assert()
         .success()
         .stderr(predicate::str::contains("warning"))
-        .stderr(predicate::str::contains(&dependent));
+        .stderr(predicate::str::contains(&dependent[dependent.len() - 7..]));
 
     let dependent_task = get_task_json(&tmp, &dependent);
     let blockers = dependent_task["blockers"].as_array().unwrap();

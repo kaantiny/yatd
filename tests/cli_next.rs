@@ -45,12 +45,13 @@ fn next_single_task() {
     let tmp = init_tmp();
     let id = create_task(&tmp, "Only task", "high", "low");
 
+    let short = &id[id.len() - 7..];
     td(&tmp)
         .arg("next")
         .current_dir(&tmp)
         .assert()
         .success()
-        .stdout(predicate::str::contains(&id))
+        .stdout(predicate::str::contains(short))
         .stdout(predicate::str::contains("Only task"))
         .stdout(predicate::str::contains("SCORE"));
 }
