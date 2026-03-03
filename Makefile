@@ -67,7 +67,7 @@ release-pack:
 	done
 
 release-upload:
-	fish -c 'release upload td $(VERSION) --latest dist/*'
+	fish -c 'release upload yatd $(VERSION) --latest dist/*'
 
 release-all: release release-build release-pack release-upload
 
