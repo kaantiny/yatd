@@ -126,9 +126,18 @@ impl Effort {
 }
 
 /// A stable task identifier backed by a ULID.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
-#[serde(transparent)]
+///
+/// Serializes as the short display form (`td-XXXXXXX`) for user-facing
+/// JSON. Use [`TaskId::as_str`] when the full ULID is needed (e.g.
+/// for CRDT keys or export round-tripping).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TaskId(String);
+
+impl Serialize for TaskId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.short())
+    }
+}
 
 impl TaskId {
     pub fn new(id: Ulid) -> Self {
@@ -191,6 +200,37 @@ pub struct Task {
     pub labels: Vec<String>,
     pub blockers: Vec<TaskId>,
     pub logs: Vec<LogEntry>,
+}
+
+impl Task {
+    /// Serialize this task with full ULIDs instead of short display IDs.
+    ///
+    /// Used by `export` so that `import` can round-trip data losslessly —
+    /// `import` needs the full ULID to recreate exact CRDT keys.
+    pub fn to_export_value(&self) -> serde_json::Value {
+        serde_json::json!({
+            "id": self.id.as_str(),
+            "title": self.title,
+            "description": self.description,
+            "type": self.task_type,
+            "priority": self.priority,
+            "status": self.status,
+            "effort": self.effort,
+            "parent": self.parent.as_ref().map(|p| p.as_str()),
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "deleted_at": self.deleted_at,
+            "labels": self.labels,
+            "blockers": self.blockers.iter().map(|b| b.as_str()).collect::<Vec<_>>(),
+            "logs": self.logs.iter().map(|l| {
+                serde_json::json!({
+                    "id": l.id.as_str(),
+                    "timestamp": l.timestamp,
+                    "message": l.message,
+                })
+            }).collect::<Vec<_>>(),
+        })
+    }
 }
 
 /// Result type for partitioning blockers by task state.

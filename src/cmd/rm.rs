@@ -80,14 +80,8 @@ pub fn run(root: &Path, ids: &[String], recursive: bool, force: bool, json: bool
     if json {
         let out = RmResult {
             requested_ids: ids.to_vec(),
-            deleted_ids: deleted_ids
-                .iter()
-                .map(|id| id.as_str().to_string())
-                .collect(),
-            unblocked_ids: unblocked_ids
-                .iter()
-                .map(|id| id.as_str().to_string())
-                .collect(),
+            deleted_ids: deleted_ids.iter().map(ToString::to_string).collect(),
+            unblocked_ids: unblocked_ids.iter().map(ToString::to_string).collect(),
         };
         println!("{}", serde_json::to_string(&out)?);
     } else {

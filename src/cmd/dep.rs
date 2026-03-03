@@ -31,7 +31,7 @@ pub fn run(root: &Path, action: &DepAction, json: bool) -> Result<()> {
             if json {
                 println!(
                     "{}",
-                    serde_json::json!({"child": child_id.as_str(), "blocker": parent_id.as_str()})
+                    serde_json::json!({"child": child_id, "blocker": parent_id})
                 );
             } else {
                 let c = crate::color::stdout_theme();

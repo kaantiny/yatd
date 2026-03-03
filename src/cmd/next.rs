@@ -25,7 +25,7 @@ pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool)
         .iter()
         .filter(|t| t.status == db::Status::Open)
         .map(|t| score::TaskInput {
-            id: t.id.as_str().to_string(),
+            id: t.id.to_string(),
             title: t.title.clone(),
             priority_score: t.priority.score(),
             effort_score: t.effort.score(),
@@ -40,7 +40,7 @@ pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool)
         .flat_map(|t| {
             t.blockers
                 .iter()
-                .map(|b| (t.id.as_str().to_string(), b.as_str().to_string()))
+                .map(|b| (t.id.to_string(), b.to_string()))
                 .collect::<Vec<_>>()
         })
         .collect();
@@ -48,7 +48,7 @@ pub fn run(root: &Path, mode_str: &str, verbose: bool, limit: usize, json: bool)
     let parents_with_open_children: HashSet<String> = all
         .iter()
         .filter(|t| t.status == db::Status::Open)
-        .filter_map(|t| t.parent.as_ref().map(|p| p.as_str().to_string()))
+        .filter_map(|t| t.parent.as_ref().map(ToString::to_string))
         .collect();
 
     let scored = score::rank(

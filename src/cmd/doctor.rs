@@ -26,7 +26,7 @@ enum FindingKind {
 #[derive(Debug, Clone, Serialize)]
 struct Finding {
     kind: FindingKind,
-    /// Full ULID of the primarily affected task.
+    /// Short display ID (`td-XXXXXXX`) of the primarily affected task.
     task: String,
     /// Human-readable description of the issue.
     detail: String,
@@ -151,7 +151,7 @@ fn check_dangling_parents(
         if !all_ids.contains(parent.as_str()) {
             findings.push(Finding {
                 kind: FindingKind::DanglingParent,
-                task: task.id.as_str().to_string(),
+                task: task.id.to_string(),
                 detail: format!(
                     "parent references missing task {}",
                     db::TaskId::display_id(parent.as_str()),
@@ -168,7 +168,7 @@ fn check_dangling_parents(
             if pt.deleted_at.is_some() {
                 findings.push(Finding {
                     kind: FindingKind::DanglingParent,
-                    task: task.id.as_str().to_string(),
+                    task: task.id.to_string(),
                     detail: format!(
                         "parent references tombstoned task {}",
                         db::TaskId::display_id(parent.as_str()),
@@ -200,7 +200,7 @@ fn check_dangling_blockers(
             if !all_ids.contains(blocker.as_str()) {
                 findings.push(Finding {
                     kind: FindingKind::DanglingBlocker,
-                    task: task.id.as_str().to_string(),
+                    task: task.id.to_string(),
                     detail: format!(
                         "blocker references missing task {}",
                         db::TaskId::display_id(blocker.as_str()),
@@ -272,7 +272,7 @@ fn check_blocker_cycles(
 
         findings.push(Finding {
             kind: FindingKind::BlockerCycle,
-            task: task_id.clone(),
+            task: db::TaskId::display_id(&task_id),
             detail: cycle_str,
             active,
             fixed: false,
@@ -351,7 +351,7 @@ fn check_parent_cycles(
 
                 findings.push(Finding {
                     kind: FindingKind::ParentCycle,
-                    task: lowest.clone(),
+                    task: db::TaskId::display_id(&lowest),
                     detail: cycle_str,
                     active: true,
                     fixed: false,
@@ -462,7 +462,7 @@ fn print_human(report: &Report, fix: bool) {
     }
 
     for f in &report.findings {
-        let short = db::TaskId::display_id(&f.task);
+        let short = &f.task;
         let kind_label = match f.kind {
             FindingKind::DanglingParent => "dangling parent",
             FindingKind::DanglingBlocker => "dangling blocker",

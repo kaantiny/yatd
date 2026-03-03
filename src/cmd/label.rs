@@ -23,10 +23,7 @@ pub fn run(root: &Path, action: &LabelAction, json: bool) -> Result<()> {
             })?;
 
             if json {
-                println!(
-                    "{}",
-                    serde_json::json!({"id": task_id.as_str(), "label": label})
-                );
+                println!("{}", serde_json::json!({"id": task_id, "label": label}));
             } else {
                 let c = crate::color::stdout_theme();
                 println!("{}added{} label {label}", c.green, c.reset);

@@ -182,12 +182,11 @@ fn import_merges_labels_and_logs_for_existing_task() {
         .assert()
         .success();
 
-    let out = td(&tmp)
-        .args(["--json", "show", &id])
-        .current_dir(&tmp)
-        .output()
-        .unwrap();
-    let mut imported: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    // Use export (which emits full ULIDs) as the basis for import data,
+    // since import expects full ULID identifiers for CRDT key fidelity.
+    let out = td(&tmp).arg("export").current_dir(&tmp).output().unwrap();
+    let exported = String::from_utf8(out.stdout).unwrap();
+    let mut imported: serde_json::Value = serde_json::from_str(exported.trim()).unwrap();
     imported["labels"] = serde_json::json!(["remote"]);
     imported["logs"] = serde_json::json!([
         {

@@ -10,7 +10,6 @@ pub fn run(root: &Path, ids: &[String], json: bool) -> Result<()> {
     let mut reopened = Vec::new();
     for raw in ids {
         let id = db::resolve_task_id(&store, raw, false)?;
-        let id_key = id.as_str().to_string();
         store.apply_and_persist(|doc| {
             let tasks = doc.get_map("tasks");
             if let Some(task) = db::get_task_map(&tasks, &id)? {
@@ -19,7 +18,7 @@ pub fn run(root: &Path, ids: &[String], json: bool) -> Result<()> {
             }
             Ok(())
         })?;
-        reopened.push(id_key);
+        reopened.push(id);
     }
 
     if json {
@@ -30,7 +29,7 @@ pub fn run(root: &Path, ids: &[String], json: bool) -> Result<()> {
         println!("{}", serde_json::to_string(&out)?);
     } else {
         let c = crate::color::stdout_theme();
-        for id in reopened {
+        for id in &reopened {
             println!("{}reopened{} {id}", c.green, c.reset);
         }
     }
