@@ -10,7 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1"
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
+chrono = { version = "0.4", default-features = false, features = ["now"] }
 clap = { version = "4", features = ["derive"] }
 comfy-table = "7.2.2"
 serde = { version = "1", features = ["derive"] }
