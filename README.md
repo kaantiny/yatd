@@ -7,13 +7,24 @@ complementary to tools like [OpenSpec].
 
 [OpenSpec]: https://github.com/Fission-AI/OpenSpec
 
-Install with `mise use -g cargo:https://git.secluded.site/yatd@latest`
-or `cargo install --git https://git.secluded.site/yatd` or by cloning
-and running `make install`. Tell your agent how/when to use td by first
-installing the skill with `td skill`, then somehow referring to td when
-telling the agent to do something involving td. It shouldn't invoke the
-skill unless you mention td, allowing your agent to use other todo/issue
-tools in other repos even with this global skill.
+## Installation
+
+Pre-built binaries are available at
+[releases.secluded.site/yatd/latest][bin-latest].
+
+[bin-latest]: https://releases.secluded.site/yatd/latest
+
+- Using [mise](https://mise.jdx.dev/) (recommended), copy the snippet from the
+  releases page into your `mise.toml` or global `~/.config/mise/config.toml` to
+  automate updates.
+- Without mise, or a similar tool, Download the binary for your platform from
+  the releases page and place it somewhere in your `$PATH`.
+
+Tell your agent how/when to use td by first installing the skill with `td
+skill`, then somehow referring to td when telling the agent to do something
+involving td. It shouldn't invoke the skill unless you mention td, allowing
+your agent to use other todo/issue tools in other repos even with this global
+skill.
 
 Inspired by [alosec/td].
 
