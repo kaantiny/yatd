@@ -26,6 +26,19 @@ involving td. It shouldn't invoke the skill unless you mention td, allowing
 your agent to use other todo/issue tools in other repos even with this global
 skill.
 
+Run `td project init <name>` to create a new project and link the current
+directory to it. If using sibling worktrees in a layout similar to the following
+and you want to share the project's tasks across worktrees, initialise from the
+project directory and not any of the worktrees. In the example, `project-name`
+should be the current working directory.
+
+```
+project-name
+├── main
+├── feature-a
+└── user/hotfix/horrible-thing-went-wrong
+```
+
 Inspired by [alosec/td].
 
 [alosec/td]: https://github.com/alosec/td/
@@ -104,7 +117,7 @@ Options:
 
 Everything is [CRDTs], so syncing is (or at least should™ be) easy! The
 built-in method uses a [Rust port][magic-wormhole.rs] of
-[magic-wormhole]. 
+[magic-wormhole].
 
 - Initiate a sync on one device with `td sync`
   - Outputs a code like `9-lurid-gecko`
