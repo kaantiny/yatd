@@ -17,7 +17,7 @@ Pre-built binaries are available at
 - Using [mise](https://mise.jdx.dev/) (recommended), copy the snippet from the
   releases page into your `mise.toml` or global `~/.config/mise/config.toml` to
   automate updates.
-- Without mise, or a similar tool, Download the binary for your platform from
+- Without mise, or a similar tool, download the binary for your platform from
   the releases page and place it somewhere in your `$PATH`.
 
 Tell your agent how/when to use td by first installing the skill with `td
