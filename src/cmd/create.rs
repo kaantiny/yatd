@@ -3,6 +3,7 @@ use loro::LoroMap;
 use std::path::Path;
 
 use crate::db;
+use crate::editor;
 
 pub struct Opts<'a> {
     pub title: Option<&'a str>,
@@ -15,11 +16,38 @@ pub struct Opts<'a> {
     pub json: bool,
 }
 
-pub fn run(root: &Path, opts: Opts) -> Result<()> {
-    let title = opts.title.ok_or_else(|| anyhow!("title required"))?;
-    let desc = opts.desc.unwrap_or("");
-    let ts = db::now_utc();
+/// Template shown in the editor when the user runs `td create` without a title.
+const TEMPLATE: &str = "
+TD: Please provide the task title on the first line, and an optional
+TD: description below. Lines starting with 'TD: ' will be ignored.
+TD: An empty message aborts.";
 
+pub fn run(root: &Path, opts: Opts) -> Result<()> {
+    // If neither title nor description were supplied, try to open an editor.
+    // We treat the presence of TD_FORCE_EDITOR as an explicit interactive
+    // signal (used by tests); otherwise we check whether stdin is a tty.
+    let (title_owned, desc_owned);
+    let (title, desc) = if opts.title.is_none() && opts.desc.is_none() {
+        let interactive = std::env::var("TD_FORCE_EDITOR").is_ok()
+            || std::io::IsTerminal::is_terminal(&std::io::stdin());
+        if interactive {
+            let (t, d) = editor::open(TEMPLATE)?;
+            title_owned = t;
+            desc_owned = d;
+            (title_owned.as_str(), desc_owned.as_str())
+        } else {
+            return Err(anyhow!(
+                "title required; provide it as a positional argument or run interactively to open an editor"
+            ));
+        }
+    } else {
+        (
+            opts.title.ok_or_else(|| anyhow!("title required"))?,
+            opts.desc.unwrap_or(""),
+        )
+    };
+
+    let ts = db::now_utc();
     let store = db::open(root)?;
     let id = db::gen_id();
 

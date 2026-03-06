@@ -101,7 +101,9 @@ fn create_with_labels() {
 }
 
 #[test]
-fn create_requires_title() {
+fn create_without_title_non_interactive_errors() {
+    // Without a title, in non-interactive mode (no tty), td should fail with
+    // a helpful message rather than silently doing nothing.
     let tmp = init_tmp();
 
     td(&tmp)
@@ -110,6 +112,49 @@ fn create_requires_title() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("title required"));
+}
+
+#[test]
+fn create_via_editor_uses_first_line_as_title() {
+    // When TD_FORCE_EDITOR is set to a command that writes known content, td
+    // should pick up the result and create the task.
+    let tmp = init_tmp();
+
+    // The fake editor overwrites its first argument with a known payload.
+    let fake_editor = "sh -c 'printf \"Editor title\\nEditor description\" > \"$1\"' sh";
+
+    let out = td(&tmp)
+        .args(["--json", "create"])
+        .env("TD_FORCE_EDITOR", fake_editor)
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["title"].as_str().unwrap(), "Editor title");
+    assert_eq!(v["description"].as_str().unwrap(), "Editor description");
+}
+
+#[test]
+fn create_via_editor_aborts_on_empty_file() {
+    // If the editor leaves the file empty (or only comments), td should exit
+    // with a non-zero status and not create a task.
+    let tmp = init_tmp();
+
+    let fake_editor = "sh -c 'printf \"TD: just a comment\\n\" > \"$1\"' sh";
+
+    td(&tmp)
+        .args(["create"])
+        .env("TD_FORCE_EDITOR", fake_editor)
+        .current_dir(&tmp)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("aborted"));
 }
 
 #[test]

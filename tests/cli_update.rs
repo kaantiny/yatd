@@ -186,3 +186,83 @@ fn reopen_reopens_closed_task() {
 
     assert_eq!(get_task_json(&tmp, &id)["status"], "open");
 }
+
+// ── editor fallback ───────────────────────────────────────────────────────────
+
+#[test]
+fn update_via_editor_changes_title_and_desc() {
+    // Bare `td update <id>` with TD_FORCE_EDITOR should open the editor
+    // pre-populated and apply whatever the fake editor writes back.
+    let tmp = init_tmp();
+    let id = create_task(&tmp, "Original title");
+
+    let fake_editor = "sh -c 'printf \"New title\\nNew description\" > \"$1\"' sh";
+
+    td(&tmp)
+        .args(["update", &id])
+        .env("TD_FORCE_EDITOR", fake_editor)
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    let t = get_task_json(&tmp, &id);
+    assert_eq!(t["title"].as_str().unwrap(), "New title");
+    assert_eq!(t["description"].as_str().unwrap(), "New description");
+}
+
+#[test]
+fn update_via_editor_aborts_on_empty_file() {
+    // If the fake editor leaves only comments, the update should be aborted.
+    let tmp = init_tmp();
+    let id = create_task(&tmp, "Stays the same");
+
+    let fake_editor = "sh -c 'printf \"TD: comment only\\n\" > \"$1\"' sh";
+
+    td(&tmp)
+        .args(["update", &id])
+        .env("TD_FORCE_EDITOR", fake_editor)
+        .current_dir(&tmp)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("aborted"));
+
+    // Title must be unchanged.
+    let t = get_task_json(&tmp, &id);
+    assert_eq!(t["title"].as_str().unwrap(), "Stays the same");
+}
+
+#[test]
+fn update_via_editor_preserves_existing_content_as_template() {
+    // The editor should be pre-populated with the task's current title and
+    // description, so the user can edit rather than retype from scratch.
+    let tmp = init_tmp();
+    let id = create_task(&tmp, "Existing title");
+
+    // Set description first.
+    td(&tmp)
+        .args(["update", &id, "-d", "Existing description"])
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    // Fake editor: grep out the first non-comment, non-blank line (the title),
+    // then write "title: <that line>" so we can assert it was pre-populated.
+    let fake_editor = concat!(
+        "sh -c '",
+        r#"title=$(grep -v "^TD: " "$1" | grep -v "^[[:space:]]*$" | head -1); "#,
+        r#"printf "title: %s" "$title" > "$1""#,
+        "' sh"
+    );
+
+    td(&tmp)
+        .args(["update", &id])
+        .env("TD_FORCE_EDITOR", fake_editor)
+        .current_dir(&tmp)
+        .assert()
+        .success();
+
+    let t = get_task_json(&tmp, &id);
+    // The fake editor wrote the existing title back with a prefix, proving it
+    // received the pre-populated template.
+    assert_eq!(t["title"].as_str().unwrap(), "title: Existing title");
+}
