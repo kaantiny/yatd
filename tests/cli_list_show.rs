@@ -274,15 +274,18 @@ fn show_all_closed_blockers_prefixed() {
         .assert()
         .success();
 
-    // Singular label, [all closed] prefix.
-    td(&tmp)
+    // Singular label, [all closed] prefix, no redundant [closed] on IDs.
+    let out = td(&tmp)
         .args(["show", &task])
         .current_dir(&tmp)
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("blocker"))
-        .stdout(predicate::str::contains("[all closed]"))
-        .stdout(predicate::str::contains(&blocker[blocker.len() - 7..]));
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("blocker"));
+    assert!(stdout.contains("[all closed]"));
+    assert!(stdout.contains(&blocker[blocker.len() - 7..]));
+    // When all are closed, individual IDs should NOT have [closed] appended.
+    assert!(!stdout.contains("[closed]"));
 }
 
 #[test]

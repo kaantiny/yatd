@@ -54,12 +54,16 @@ pub fn run(root: &Path, id: &str, json: bool) -> Result<()> {
     let blockers = db::partition_blockers(&store, &task.blockers)?;
     let total = blockers.open.len() + blockers.resolved.len();
     if total > 0 {
-        let mut ids: Vec<String> = blockers.open.iter().map(ToString::to_string).collect();
-        ids.extend(blockers.resolved.iter().map(|id| format!("{id} [closed]")));
+        let label = if total == 1 { "blocker" } else { "blockers" };
         if blockers.open.is_empty() {
-            println!("blockers: [all closed] {}", ids.join(", "));
+            // All closed: prefix with [all closed], no individual markers.
+            let ids: Vec<String> = blockers.resolved.iter().map(ToString::to_string).collect();
+            println!("{label}: [all closed] {}", ids.join(", "));
         } else {
-            println!("blockers: {}", ids.join(", "));
+            // Mixed or all open: annotate only the closed ones.
+            let mut ids: Vec<String> = blockers.open.iter().map(ToString::to_string).collect();
+            ids.extend(blockers.resolved.iter().map(|id| format!("{id} [closed]")));
+            println!("{label}: {}", ids.join(", "));
         }
     }
 
