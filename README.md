@@ -26,22 +26,35 @@ Download the binary for your platform and place it somewhere in your `$PATH`.
 Add to your `mise.toml` or `~/.config/mise/config.toml`:
 
 ```toml
-[tools."http:yatd"]
+# Use github: prefix for GitHub backend - handles "latest" correctly
+[tools."github:kaantiny/yatd"]
 version = "latest"
-url = 'https://github.com/kaantiny/yatd/releases/download/v{{ version }}/td-{{ version }}-x86_64-unknown-linux-gnu.tar.gz'
+asset_pattern = "td-{{ version }}-aarch64-apple-darwin"
 bin = "td"
-platforms_macos_arm64_url = 'https://github.com/kaantiny/yatd/releases/download/v{{ version }}/td-{{ version }}-aarch64-apple-darwin.tar.gz'
-platforms_macos_x64_url = 'https://github.com/kaantiny/yatd/releases/download/v{{ version }}/td-{{ version }}-x86_64-apple-darwin.tar.gz'
-platforms_linux_x64_url = 'https://github.com/kaantiny/yatd/releases/download/v{{ version }}/td-{{ version }}-x86_64-unknown-linux-gnu.tar.gz'
-platforms_linux_arm64_url = 'https://github.com/kaantiny/yatd/releases/download/v{{ version }}/td-{{ version }}-aarch64-unknown-linux-gnu.tar.gz'
-platforms_windows_x64_url = 'https://github.com/kaantiny/yatd/releases/download/v{{ version }}/td-{{ version }}-x86_64-pc-windows-msvc.zip'
-platforms_freebsd_x64_url = 'https://github.com/kaantiny/yatd/releases/download/v{{ version }}/td-{{ version }}-x86_64-unknown-freebsd.tar.gz'
+
+[tools."github:kaantiny/yatd".platforms.macos_arm64]
+asset_pattern = "td-{{ version }}-aarch64-apple-darwin"
+
+[tools."github:kaantiny/yatd".platforms.macos_x64]
+asset_pattern = "td-{{ version }}-x86_64-apple-darwin"
+
+[tools."github:kaantiny/yatd".platforms.linux_arm64]
+asset_pattern = "td-{{ version }}-aarch64-unknown-linux-gnu"
+
+[tools."github:kaantiny/yatd".platforms.linux_x64]
+asset_pattern = "td-{{ version }}-x86_64-unknown-linux-gnu"
+
+[tools."github:kaantiny/yatd".platforms.windows_x64]
+asset_pattern = "td-{{ version }}-x86_64-pc-windows-msvc.exe"
+
+[tools."github:kaantiny/yatd".platforms.freebsd_x64]
+asset_pattern = "td-{{ version }}-x86_64-unknown-freebsd"
 ```
 
 Or install directly:
 
 ```bash
-mise use -g http:yatd@latest
+mise use -g github:kaantiny/yatd@latest
 ```
 
 Tell your agent how/when to use td by first installing the skill with `td
