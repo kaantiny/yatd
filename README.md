@@ -1,5 +1,9 @@
 # yatd, _yet another td_
 
+> **Note:** This is a fork from [git.secluded.site/yatd](https://git.secluded.site/yatd) by Amolith.
+>
+> **Fork additions:** Modular workflow skills (`td-plan`, `td-decompose`, `td-review`, `td-spec`, `td-execute`) following the [Agent Skills specification](https://agentskills.io/specification). These break down the "td on its own" workflow into installable skill modules.
+
 There are many tds. This one is mine. It's in Rust, very fast, very
 small, fairly simple, and includes a skill. I intend it to be the bare
 minimum for something like a repo-specific issue tracker and possibly
@@ -9,16 +13,36 @@ complementary to tools like [OpenSpec].
 
 ## Installation
 
-Pre-built binaries are available at
-[releases.secluded.site/yatd/latest][bin-latest].
+Pre-built binaries are available at **[GitHub releases](https://github.com/kaantiny/yatd/releases/latest)**.
 
-[bin-latest]: https://releases.secluded.site/yatd/latest
+This fork includes:
+- Binary for your platform
+- `skills.tar.gz` containing workflow skills (`td-plan`, `td-decompose`, etc.)
 
-- Using [mise](https://mise.jdx.dev/) (recommended), copy the snippet from the
-  releases page into your `mise.toml` or global `~/.config/mise/config.toml` to
-  automate updates.
-- Without mise, or a similar tool, download the binary for your platform from
-  the releases page and place it somewhere in your `$PATH`.
+Download the binary for your platform and place it somewhere in your `$PATH`.
+
+### Using mise (recommended)
+
+Add to your `mise.toml` or `~/.config/mise/config.toml`:
+
+```toml
+[tools."http:yatd"]
+version = "latest"
+url = 'https://github.com/kaantiny/yatd/releases/download/v{{ version }}/td-{{ version }}-x86_64-unknown-linux-gnu.tar.gz'
+bin = "td"
+platforms_macos_arm64_url = 'https://github.com/kaantiny/yatd/releases/download/v{{ version }}/td-{{ version }}-aarch64-apple-darwin.tar.gz'
+platforms_macos_x64_url = 'https://github.com/kaantiny/yatd/releases/download/v{{ version }}/td-{{ version }}-x86_64-apple-darwin.tar.gz'
+platforms_linux_x64_url = 'https://github.com/kaantiny/yatd/releases/download/v{{ version }}/td-{{ version }}-x86_64-unknown-linux-gnu.tar.gz'
+platforms_linux_arm64_url = 'https://github.com/kaantiny/yatd/releases/download/v{{ version }}/td-{{ version }}-aarch64-unknown-linux-gnu.tar.gz'
+platforms_windows_x64_url = 'https://github.com/kaantiny/yatd/releases/download/v{{ version }}/td-{{ version }}-x86_64-pc-windows-msvc.zip'
+platforms_freebsd_x64_url = 'https://github.com/kaantiny/yatd/releases/download/v{{ version }}/td-{{ version }}-x86_64-unknown-freebsd.tar.gz'
+```
+
+Or install directly:
+
+```bash
+mise use -g http:yatd@latest
+```
 
 Tell your agent how/when to use td by first installing the skill with `td
 skill`, then somehow referring to td when telling the agent to do something
@@ -74,6 +98,42 @@ use them together soon and will describe whatever workflow I end up with
 then.
 
 </details>
+
+## Workflow Skills (Fork Addition)
+
+This fork adds **modular workflow skills** that break down the "td on its own" workflow into installable components. All skills are **embedded in the binary** — no network required.
+
+### Install Skills
+
+```bash
+# List available skills (base + 5 workflow skills)
+td skill --list
+
+# Install the base skill only
+td skill
+
+# Install a specific workflow skill
+td skill --install td-plan
+td skill --install td-decompose
+td skill --install td-review
+td skill --install td-spec
+td skill --install td-execute
+
+# Install all skills at once
+td skill --all
+```
+
+### Available Skills
+
+| Skill | Trigger | Purpose |
+|-------|---------|---------|
+| `td-plan` | "let's think about [feature]" | Interview user, explore edge cases, log decisions |
+| `td-decompose` | "break this into tasks" | Create tasks with dependencies from a plan |
+| `td-review` | After `td next` | Evaluate if task is ready or needs more planning |
+| `td-spec` | "let's plan out {id}" | Deep-dive on task, fill gaps, add implementation notes |
+| `td-execute` | "let's get started on {id}" | Explore codebase, scope child tasks, begin work |
+
+All skills follow the [Agent Skills specification](https://agentskills.io/specification) with proper YAML frontmatter.
 
 ```
 $ td --help

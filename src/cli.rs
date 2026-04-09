@@ -208,11 +208,20 @@ pub enum Command {
         code: Option<String>,
     },
 
-    /// Install the agent skill file (SKILL.md)
+    /// Install the agent skill file(s) (SKILL.md)
     Skill {
-        /// Skills directory (writes managing-tasks-with-td/SKILL.md inside)
+        /// Skills directory (writes skills inside)
         #[arg(long)]
         dir: Option<String>,
+        /// List available skills
+        #[arg(short, long)]
+        list: bool,
+        /// Install specific skill (use 'base' for main skill)
+        #[arg(short, long)]
+        install: Option<String>,
+        /// Install all workflow skills
+        #[arg(long)]
+        all: bool,
     },
 }
 

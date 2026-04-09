@@ -173,6 +173,8 @@ pub fn dispatch(cli: &Cli) -> Result<()> {
             let root = require_root()?;
             sync::run(&root, code.as_deref(), cli.json)
         }
-        Command::Skill { dir } => skill::run(dir.as_deref()),
+        Command::Skill { dir, list, install, all } => {
+            skill::run(dir.as_deref(), *list, install.as_deref(), *all)
+        }
     }
 }
