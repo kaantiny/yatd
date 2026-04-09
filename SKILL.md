@@ -1,6 +1,7 @@
 ---
 name: managing-tasks-with-td
 description: Manages tasks with the td CLI. Use when tracking work items, creating todos, managing task dependencies, or when the user mentions td, tasks, or todos in a project using td. When the project obviously uses something else, or the user doesn't mention td explicitly, do not read.
+license: MIT
 ---
 
 Don't forget the single quotes around `'EOF'` HEREDOCs; they disable

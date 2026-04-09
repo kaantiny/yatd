@@ -208,11 +208,23 @@ pub enum Command {
         code: Option<String>,
     },
 
-    /// Install the agent skill file (SKILL.md)
+    /// Install the agent skill file(s) (SKILL.md)
     Skill {
-        /// Skills directory (writes managing-tasks-with-td/SKILL.md inside)
+        /// Skills directory to install to (default: ~/.config/agents/skills)
         #[arg(long)]
         dir: Option<String>,
+        /// List available skills
+        #[arg(short, long)]
+        list: bool,
+        /// Install specific skill (use 'base' for main skill only)
+        #[arg(short, long)]
+        install: Option<String>,
+        /// Install only base skill, skip workflow skills
+        #[arg(long)]
+        base_only: bool,
+        /// Install from local directory instead of embedded skills
+        #[arg(long)]
+        from_dir: Option<String>,
     },
 }
 
